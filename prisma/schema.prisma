@@ -1,0 +1,73 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlserver"
+  url      = env("DATABASE_URL")
+}
+
+model Book {
+  id          String     @id @default(uuid())
+  title       String
+  author      String
+  published   Int
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+  available   Boolean    @default(true)
+  imageUrl    String?    @db.Text
+  borrows     Borrow[]
+  favoritedBy Favorite[]
+  categories  BookCategory[]
+}
+
+model User {
+  id              String     @id @default(uuid())
+  name            String
+  email           String     @unique
+  role            String     @default("user")
+  createdAt       DateTime   @default(now())
+  updatedAt       DateTime   @updatedAt
+  password        String
+  profileImageUrl String?    @db.Text
+  borrows         Borrow[]
+  favorites       Favorite[]
+}
+
+model Borrow {
+  id         String    @id @default(uuid())
+  userId     String
+  bookId     String
+  borrowDate DateTime  @default(now())
+  returnDate DateTime?
+  book       Book      @relation(fields: [bookId], references: [id])
+  user       User      @relation(fields: [userId], references: [id])
+}
+
+model Favorite {
+  id        String   @id @default(uuid())
+  userId    String
+  bookId    String
+  createdAt DateTime @default(now())
+  book      Book     @relation(fields: [bookId], references: [id])
+  user      User     @relation(fields: [userId], references: [id])
+
+  @@unique([userId, bookId])
+}
+
+model Category {
+  id          String         @id @default(uuid())
+  name        String         @unique
+  description String?        @db.Text
+  books       BookCategory[]
+}
+
+model BookCategory {
+  bookId      String
+  categoryId  String
+  book        Book           @relation(fields: [bookId], references: [id])
+  category    Category       @relation(fields: [categoryId], references: [id])
+  assignedAt  DateTime       @default(now())
+
+  @@id([bookId, categoryId])
+}

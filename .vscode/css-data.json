@@ -1,0 +1,35 @@
+{
+  "version": 1.1,
+  "atDirectives": [
+    {
+      "name": "@tailwind",
+      "description": "Tailwind CSS direktifi",
+      "references": [
+        {
+          "name": "Tailwind CSS Dokümantasyonu",
+          "url": "https://tailwindcss.com/docs/functions-and-directives#tailwind"
+        }
+      ]
+    },
+    {
+      "name": "@apply",
+      "description": "Tailwind sınıflarını CSS içerisinde kullanmayı sağlar",
+      "references": [
+        {
+          "name": "Tailwind CSS Dokümantasyonu",
+          "url": "https://tailwindcss.com/docs/functions-and-directives#apply"
+        }
+      ]
+    },
+    {
+      "name": "@layer",
+      "description": "Tailwind katmanlarını tanımlar",
+      "references": [
+        {
+          "name": "Tailwind CSS Dokümantasyonu",
+          "url": "https://tailwindcss.com/docs/functions-and-directives#layer"
+        }
+      ]
+    }
+  ]
+} 
