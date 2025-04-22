@@ -100,9 +100,3 @@ Projenin detaylı geliştirme planı [PRD.md](PRD.md) dosyasında mevcuttur. Bu 
 ## Lisans
 
 Bu proje MIT lisansı altında lisanslanmıştır - detaylar için [LICENSE](LICENSE) dosyasına bakın.
-
-## İletişim
-
-Proje Sahibi - [@your-twitter](https://twitter.com/your-twitter)
-
-Proje Linki: [https://github.com/yourusername/library-management-system](https://github.com/yourusername/library-management-system)
