@@ -4,6 +4,31 @@ import React, { useState, useEffect, CSSProperties, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import Navbar from '../../components/Navbar';
 import Link from 'next/link';
+import Image from 'next/image';
+
+/**
+ * Book ve Category tiplerinin tanımları
+ */
+interface Category {
+  id: string;
+  name: string;
+}
+
+interface BookCategory {
+  categoryId: string;
+  category?: Category;
+}
+
+interface Book {
+  id: string;
+  title: string;
+  author: string;
+  published: number;
+  imageUrl?: string;
+  cover_image?: string;
+  available: boolean;
+  categories: BookCategory[];
+}
 
 /**
  * Kitap Yönetimi Sayfası
@@ -13,17 +38,15 @@ export default function AdminBooksPage() {
   const router = useRouter();
 
   // Kitap verileri için state'ler
-  const [books, setBooks] = useState<any[]>([]);
+  const [books, setBooks] = useState<Book[]>([]);
   const [title, setTitle] = useState<string>('');
   const [author, setAuthor] = useState<string>('');
   const [published, setPublished] = useState<string>('');
   const [imageUrl, setImageUrl] = useState<string>('');
   const [isUploading, setIsUploading] = useState<boolean>(false);
-  const [editingBook, setEditingBook] = useState<any | null>(null);
-  const [categories, setCategories] = useState<any[]>([]);
+  const [editingBook, setEditingBook] = useState<Book | null>(null);
+  const [categories, setCategories] = useState<Category[]>([]);
   const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
-  const [loadingCategories, setLoadingCategories] = useState<boolean>(false);
-  const [isCategoryDropdownOpen, setIsCategoryDropdownOpen] = useState<boolean>(false);
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
   
@@ -47,7 +70,6 @@ export default function AdminBooksPage() {
   // Kategorileri getiren fonksiyon
   const fetchCategories = async () => {
     try {
-      setLoadingCategories(true);
       const response = await fetch('/api/categories');
       
       if (!response.ok) {
@@ -59,8 +81,6 @@ export default function AdminBooksPage() {
     } catch (err) {
       console.error('Kategori getirme hatası:', err);
       // Hata durumunda işlem yapma
-    } finally {
-      setLoadingCategories(false);
     }
   };
 
@@ -79,17 +99,17 @@ export default function AdminBooksPage() {
       const data = await response.json();
       
       // Kitapları kategorileriyle birlikte getir
-      const booksWithCategoriesPromises = data.map(async (book: any) => {
+      const booksWithCategoriesPromises = data.map(async (book: Partial<Book>) => {
         try {
           const catResponse = await fetch(`/api/books/${book.id}/categories`);
           if (catResponse.ok) {
             const categories = await catResponse.json();
-            return { ...book, categories };
+            return { ...book, categories } as Book;
           }
         } catch (err) {
           console.error(`${book.id} ID'li kitabın kategorileri getirilemedi:`, err);
         }
-        return book;
+        return book as Book;
       });
       
       const booksWithCategories = await Promise.all(booksWithCategoriesPromises);
@@ -230,7 +250,7 @@ export default function AdminBooksPage() {
   };
 
   // Kitap düzenleme işlemi
-  const handleEdit = (book: any) => {
+  const handleEdit = (book: Book) => {
     setEditingBook(book);
     setTitle(book.title);
     setAuthor(book.author);
@@ -239,7 +259,7 @@ export default function AdminBooksPage() {
     
     // Kitabın kategorilerini ayarla (varsa)
     if (book.categories && Array.isArray(book.categories)) {
-      const categoryIds = book.categories.map((cat: any) => cat.categoryId);
+      const categoryIds = book.categories.map((cat: BookCategory) => cat.categoryId);
       setSelectedCategories(categoryIds);
     } else {
       setSelectedCategories([]);
@@ -284,8 +304,8 @@ export default function AdminBooksPage() {
       setIsUploading(true);
       setError(null);
 
-      // Resmi canvas kullanarak sıkıştır
-      const compressedImage = await compressImage(file, 800); // 800px maksimum genişlik/yükseklik
+      // Resmi canvas kullanarak sıkıştır - compressImage artık sadece file parameteresi alıyor
+      const compressedImage = await compressImage(file);
       
       // Base64 formatını kontrol et
       const validatedImage = validateAndFixBase64(compressedImage);
@@ -319,13 +339,15 @@ export default function AdminBooksPage() {
   };
 
   // Resim sıkıştırma fonksiyonu
-  const compressImage = (file: File, maxSize: number): Promise<string> => {
+  const compressImage = (file: File): Promise<string> => {
     return new Promise((resolve, reject) => {
       const reader = new FileReader();
       reader.readAsDataURL(file);
       
       reader.onload = (event) => {
-        const img = new Image();
+        // DOM Image yapıcısını kullanıyoruz, next/image ile karışmasın diye
+         
+        const img = document.createElement('img');
         img.src = event.target?.result as string;
         
         img.onload = () => {
@@ -426,9 +448,9 @@ export default function AdminBooksPage() {
   }, []);
 
   // Handle category selection
-  const toggleCategory = (category: any) => {
+  const toggleCategory = (category: Category) => {
     setSelectedCategories(prev => {
-      const isSelected = prev.some(cat => cat === category.id);
+      const isSelected = prev.some(id => id === category.id);
       if (isSelected) {
         return prev.filter(id => id !== category.id);
       } else {
@@ -585,48 +607,6 @@ export default function AdminBooksPage() {
     backgroundColor: 'rgba(30, 41, 59, 0.6)',
     color: 'white',
     fontSize: '0.875rem',
-  };
-
-  // İlk hücre stili (yuvarlatılmış köşeler)
-  const firstCellStyle: CSSProperties = {
-    ...tableCellStyle,
-    borderTopLeftRadius: '6px',
-    borderBottomLeftRadius: '6px',
-  };
-
-  // Son hücre stili (yuvarlatılmış köşeler)
-  const lastCellStyle: CSSProperties = {
-    ...tableCellStyle,
-    borderTopRightRadius: '6px',
-    borderBottomRightRadius: '6px',
-  };
-
-  // İşlem butonları konteyneri
-  const actionButtonsStyle: CSSProperties = {
-    display: 'flex',
-    gap: '0.5rem',
-  };
-
-  // Düzenleme butonu stili
-  const editButtonStyle: CSSProperties = {
-    padding: '0.5rem 0.75rem',
-    backgroundColor: 'rgba(59, 130, 246, 0.2)',
-    color: '#60a5fa',
-    borderRadius: '4px',
-    fontSize: '0.75rem',
-    border: 'none',
-    cursor: 'pointer',
-  };
-
-  // Silme butonu stili
-  const deleteButtonStyle: CSSProperties = {
-    padding: '0.5rem 0.75rem',
-    backgroundColor: 'rgba(239, 68, 68, 0.2)',
-    color: '#ef4444',
-    borderRadius: '4px',
-    fontSize: '0.75rem',
-    border: 'none',
-    cursor: 'pointer',
   };
 
   // Mesaj kutusu stili
@@ -859,16 +839,22 @@ export default function AdminBooksPage() {
                     }}>
                       {imageUrl ? (
                         <div style={{ position: 'relative' }}>
-                          <img 
-                            src={imageUrl} 
-                            alt="Kitap kapağı önizleme" 
-                            style={{ 
-                              maxWidth: '100%', 
-                              maxHeight: '150px', 
-                              marginBottom: '0.5rem',
-                              borderRadius: '4px'
-                            }} 
-                          />
+                          <div style={{ 
+                            position: 'relative', 
+                            width: '100%', 
+                            height: '150px',
+                            marginBottom: '0.5rem' 
+                          }}>
+                            <Image 
+                              src={imageUrl} 
+                              alt="Kitap kapağı önizleme" 
+                              fill
+                              style={{ 
+                                objectFit: 'contain',
+                                borderRadius: '4px'
+                              }} 
+                            />
+                          </div>
                           <button
                             type="button"
                             onClick={handleRemoveImage}
@@ -996,10 +982,16 @@ export default function AdminBooksPage() {
                   <tbody>
                     {books.map((book, index) => (
                       <tr key={book.id} className={index % 2 === 0 ? 'bg-gray-800' : 'bg-gray-900'}>
-                        <td className="px-6 py-4 whitespace-nowrap">
+                        <td style={tableCellStyle} className="px-6 py-4 whitespace-nowrap">
                           <div className="flex items-center">
-                            <div className="h-10 w-10 flex-shrink-0">
-                              <img className="h-10 w-10 rounded-md object-cover" src={book.cover_image || "/placeholder-book.png"} alt={book.title} />
+                            <div className="h-10 w-10 flex-shrink-0 relative">
+                              <Image 
+                                className="rounded-md object-cover" 
+                                src={book.cover_image || "/placeholder-book.png"} 
+                                alt={book.title}
+                                fill
+                                sizes="40px"
+                              />
                             </div>
                             <div className="ml-4">
                               <div className="text-sm font-medium text-white">{book.title}</div>
@@ -1007,19 +999,33 @@ export default function AdminBooksPage() {
                             </div>
                           </div>
                         </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
+                        <td style={tableCellStyle} className="px-6 py-4 whitespace-nowrap">
                           <div className="text-sm text-white">{book.published}</div>
                         </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <div className="text-sm text-gray-400">{book.categories.map((cat: any) => cat.categoryId).join(', ')}</div>
+                        <td style={tableCellStyle} className="px-6 py-4 whitespace-nowrap">
+                          <div className="text-sm text-gray-400">{book.categories.map((cat: BookCategory) => cat.categoryId).join(', ')}</div>
                         </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
+                        <td style={tableCellStyle} className="px-6 py-4 whitespace-nowrap">
                           <span className="px-2 py-1 text-sm font-medium text-white rounded-full">
                             {book.available ? 'Müsait' : 'Ödünç Alındı'}
                           </span>
                         </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                          <a href="#" className="text-indigo-400 hover:text-indigo-300">Edit</a>
+                        <td style={tableCellStyle} className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                          <div className="flex space-x-2">
+                            <button 
+                              onClick={() => handleEdit(book)} 
+                              className="text-indigo-400 hover:text-indigo-300"
+                            >
+                              Düzenle
+                            </button>
+                            <button 
+                              onClick={() => handleDelete(book.id, index)} 
+                              className="text-red-400 hover:text-red-300"
+                              disabled={isDeleting === index}
+                            >
+                              {isDeleting === index ? 'Siliniyor...' : 'Sil'}
+                            </button>
+                          </div>
                         </td>
                       </tr>
                     ))}

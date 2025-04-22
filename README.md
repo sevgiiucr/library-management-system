@@ -28,7 +28,7 @@ Modern ve kullanıcı dostu bir kütüphane yönetim sistemi. Kitapları kategor
 ### Gereksinimler
 
 - Node.js 18.x veya üzeri
-- npm veya yarn
+- npm
 - MSSQL (Microsoft SQL Server) veritabanı
 
 ### Kurulum

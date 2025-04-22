@@ -1,30 +1,16 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/app/lib/prisma';
 
-// Geçici veritabanı referansı (app/api/books/route.ts'den gelecek)
-// Bu mock API'da aynı veri yapısını kullanabilmek için global değişkenleri referans olarak alıyoruz
-// Gerçek uygulamada bu bir veritabanı olacaktır
-let books: any[] = [];
-
-// books array'ini başka bir modülden import etmediğimiz için
-// bu route dosyası yüklendiğinde, ana API modülündeki books array'ini almak için hack kullanıyoruz
-// Bu, development amaçlı bir çözümdür
-const getBooksRef = async () => {
-  if (books.length === 0) {
-    try {
-      // API'yi çağırarak mevcut kitapları al
-      const response = await fetch('http://localhost:3000/api/books');
-      if (response.ok) {
-        const data = await response.json();
-        // books dizisini güncelle (referansı değiştirmeden)
-        books.splice(0, books.length, ...data);
-      }
-    } catch (error) {
-      console.error('Kitaplar referansı alınamadı:', error);
-    }
-  }
-  return books;
-};
+// Interface tanımı - tip kontrolü için kullanıldığı için tutuyoruz
+interface BookData {
+  id: string;
+  title: string;
+  author: string;
+  published: number;
+  available: boolean;
+  imageUrl?: string | null;
+  categories?: { categoryId: string }[];
+}
 
 // ===================================
 // GET - Tekil Kitap Getirme Endpoint'i
@@ -189,7 +175,7 @@ export async function PUT(
       imageUrlValue ? 'Yeni değer (base64 string)' : 'Null olarak ayarlanacak');
     
     // Güncelleme verisini hazırla
-    const updateData: any = {
+    const updateData: Record<string, any> = {
       title,
       author,
       published: publishedYear

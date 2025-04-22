@@ -135,7 +135,6 @@ export default function AdminUsersPage() {
       }
 
       if (response.ok) {
-        const result = await response.json();
         setSuccessMessage(editingUser ? 'Kullanıcı başarıyla güncellendi!' : 'Kullanıcı başarıyla oluşturuldu!');
         resetForm();
         

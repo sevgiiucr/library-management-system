@@ -191,7 +191,7 @@ module.exports = {
   // Tailwind CSS eklentileri
   plugins: [
     // Form elemanları için eklenti
-    require('@tailwindcss/forms'),
+    import('@tailwindcss/forms'),
     
     // Özel kullanıcı tanımlı yardımcı sınıflar
     function({ addUtilities }) {

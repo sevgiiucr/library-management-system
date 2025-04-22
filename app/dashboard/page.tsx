@@ -1,30 +1,20 @@
 'use client';
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import Image from 'next/image';
-
-interface Book {
-  id: string;
-  title: string;
-  author: string;
-  published: number;
-  borrowDate: string;
-  returnDate: string | null;
-}
-
-interface User {
-  id: string;
-  name: string;
-  email: string;
-  profileImageUrl?: string;
-  createdAt?: string;
-}
+import Navbar from '../components/Navbar';
+import Link from 'next/link';
+import '@/app/globals.css';
+import { toast, Toaster } from "react-hot-toast";
+import { User } from "@/types/user";
+import { Book } from "@/types/book";
 
 export default function Dashboard() {
   const [borrowedBooks, setBorrowedBooks] = useState<Book[]>([]);
   const [favoriteBooks, setFavoriteBooks] = useState<any[]>([]);
   const [completedBooks, setCompletedBooks] = useState<number>(0);
+  const [userToken, setUserToken] = useState<string | null>(null);
   const [userInfo, setUserInfo] = useState<User>({
     id: '',
     name: '',
@@ -37,191 +27,192 @@ export default function Dashboard() {
   const router = useRouter();
   const videoRef = useRef<HTMLVideoElement>(null);
   const [error, setError] = useState<string | null>(null);
+  const [isUserLoading, setIsUserLoading] = useState(true);
+  const [isBooksLoading, setIsBooksLoading] = useState(true);
 
-  useEffect(() => {
-    // Kullanıcı bilgilerini localStorage'dan al
-    const userStr = localStorage.getItem('user');
-    const token = localStorage.getItem('token');
-    
-    if (!userStr || !token) {
-      router.push('/');
-      return;
-    }
-
+  // Güncellenmiş useCallback ile fonksiyonlar
+  const fetchUserProfile = useCallback(async () => {
+    setIsUserLoading(true);
     try {
-      const user = JSON.parse(userStr);
-      setUserInfo({
-        id: user.id || '',
-        name: user.name || 'Misafir Kullanıcı',
-        email: user.email || '',
-        profileImageUrl: user.profileImageUrl || user.profileImage,
-        createdAt: user.createdAt
+      // localStorage'dan token alınması
+      const token = localStorage.getItem("token");
+      if (!token) {
+        router.push("/signin");
+        return;
+      }
+
+      // Önce localStorage'dan kullanıcı bilgilerini almayı deneyelim
+      const userStr = localStorage.getItem("user");
+      if (userStr) {
+        try {
+          const userData = JSON.parse(userStr);
+          setUserInfo({
+            id: userData.id || '',
+            name: userData.name || '',
+            email: userData.email || '',
+            profileImageUrl: userData.profileImageUrl,
+            role: userData.role,
+            createdAt: userData.createdAt
+          });
+          
+          // Eğer localStorage'da kullanıcı varsa, profil API isteğine gerek kalmaz
+          console.log("Kullanıcı bilgileri localStorage'dan alındı:", userData.name);
+          
+          // Tamamlanmış kitapları almak için borrows API'sini kullanalım
+          await fetchCompletedBorrows(token);
+          
+          setIsUserLoading(false);
+          return;
+        } catch (e) {
+          console.error("localStorage'daki kullanıcı verisi işlenemedi:", e);
+          // Local storage'da hata varsa API isteğine devam et
+        }
+      }
+
+      // API isteği ile kullanıcı profilini almayı dene
+      const response = await fetch("/api/users/profile", {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
       });
 
-      // API'den kullanıcı bilgilerini (ve createdAt değerini) al
-      fetchUserProfile(token);
-      
-      // Ödünç alınan kitapları API'den al
-      fetchBorrowedBooks(token);
-      // Favori kitapları API'den al
-      fetchFavoriteBooks(token);
-      // Tamamlanmış ödünç almaları al
-      fetchCompletedBooks(token);
+      if (!response.ok) {
+        if (response.status === 401) {
+          toast.error("Oturum süresi doldu, lütfen tekrar giriş yapın");
+          localStorage.removeItem("token");
+          router.push("/signin");
+          return;
+        }
+        throw new Error("Profil bilgileri alınamadı");
+      }
+
+      const data = await response.json();
+      setUserInfo(data.user);
+      setCompletedBooks(data.completedBooks || 0);
     } catch (error) {
-      console.error('Kullanıcı bilgisi işlenirken hata:', error);
+      console.error("Kullanıcı profili alınamadı:", error);
+      toast.error("Kullanıcı bilgileri yüklenirken bir hata oluştu");
+    } finally {
+      setIsUserLoading(false);
     }
   }, [router]);
 
-  // Kullanıcı profilini API'den al
-  const fetchUserProfile = async (token: string) => {
+  const fetchBorrowedBooks = useCallback(async () => {
+    setIsBooksLoading(true);
+    
     try {
+      const token = localStorage.getItem("token");
       if (!token) {
-        console.log("Token bulunamadı, kullanıcı girişine yönlendiriliyor");
-        router.push('/');
+        setIsBooksLoading(false);
+        return;
+      }
+
+      // Kullanıcı bilgilerini localStorage'dan al
+      const userStr = localStorage.getItem("user");
+      if (!userStr) {
+        setIsBooksLoading(false);
         return;
       }
       
-      console.log("Kullanıcı profili API isteği yapılıyor...");
+      console.log("Ödünç kitapları getirme işlemi başlatıldı...");
       
-      // Yeni oluşturduğumuz /api/auth/me endpoint'ini kullanıyoruz
-      const response = await fetch('/api/auth/me', {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Cache-Control': 'no-cache, no-store, must-revalidate'
-        }
+      // Timeout promise oluştur - 15 saniye sonra sonlandır
+      const timeoutPromise = new Promise((_, reject) => {
+        setTimeout(() => {
+          reject(new Error("Ödünç kitaplar getirilirken zaman aşımı"));
+        }, 15000);
       });
       
-      console.log('Kullanıcı profili API yanıt durumu:', response.status);
-
-      if (!response.ok) {
-        // 401 veya 403 hatası alındığında token geçersiz olabilir
-        if (response.status === 401 || response.status === 403) {
-          console.error('Token geçersiz, oturum yenileniyor');
-          // LocalStorage'dan token ve kullanıcı bilgilerini temizle
-          localStorage.removeItem('token');
-          localStorage.removeItem('user');
-          // Kullanıcıyı giriş sayfasına yönlendir
-          router.push('/');
-          return;
-        }
-        console.error('Kullanıcı profili getirme hatası:', response.status);
-        return;
-      }
-
-      const data = await response.json();
-      console.log('Kullanıcı profili yanıt verisi:', data);
-      
-      if (data && data.user) {
-        // Kullanıcı bilgilerini güncelle
-        setUserInfo(prevInfo => ({
-          ...prevInfo,
-          name: data.user.name || prevInfo.name,
-          email: data.user.email || prevInfo.email,
-          profileImageUrl: data.user.profileImageUrl || prevInfo.profileImageUrl,
-          createdAt: data.user.createdAt || prevInfo.createdAt
-        }));
-        
-        // LocalStorage'daki kullanıcı bilgilerini güncelle
+      // API isteği promise'i
+      const fetchPromise = (async () => {
         try {
-          const userStr = localStorage.getItem('user');
-          if (userStr) {
-            const user = JSON.parse(userStr);
-            user.createdAt = data.user.createdAt;
-            localStorage.setItem('user', JSON.stringify(user));
+          // API isteği
+          console.log("Active borrows API isteği yapılıyor...");
+          const response = await fetch(`/api/borrows/active`, {
+            headers: {
+              Authorization: `Bearer ${token}`,
+            },
+          });
+    
+          if (!response.ok) {
+            throw new Error(`Ödünç alınan kitaplar alınamadı: ${response.status}`);
           }
+    
+          console.log("Active borrows API yanıtı alındı");
+          const activeBorrows = await response.json();
+          console.log(`${activeBorrows.length} aktif ödünç alma kaydı alındı:`, activeBorrows);
+          
+          if (activeBorrows.length === 0) {
+            setBorrowedBooks([]);
+            return [];
+          }
+          
+          // Kitap detaylarını getir
+          console.log("Kitap detayları getiriliyor...");
+          const books = [];
+          for (const borrow of activeBorrows) {
+            try {
+              const bookResponse = await fetch(`/api/books/${borrow.bookId}`, {
+                headers: {
+                  Authorization: `Bearer ${token}`,
+                },
+              });
+              
+              if (!bookResponse.ok) {
+                console.error(`Kitap detayı alınamadı: ${borrow.bookId} - ${bookResponse.status}`);
+                continue;
+              }
+              
+              const book = await bookResponse.json();
+              books.push({
+                ...book,
+                borrowDate: borrow.borrowDate,
+                dueDate: borrow.dueDate
+              });
+              
+              console.log(`Kitap yüklendi: ${book.title}`);
+            } catch (bookError) {
+              console.error(`Kitap detayı alınırken hata: ${borrow.bookId}`, bookError);
+            }
+          }
+          
+          console.log(`${books.length}/${activeBorrows.length} kitap detayı başarıyla alındı`);
+          return books;
         } catch (err) {
-          console.error('localStorage güncelleme hatası:', err);
+          console.error("Fetch promise hatası:", err);
+          throw err;
         }
-      }
-    } catch (error) {
-      console.error('Kullanıcı profili API hatası:', error);
-    }
-  };
-
-  // Ödünç alınan kitapları API'den al
-  const fetchBorrowedBooks = async (token: string) => {
-    try {
-      setLoading(true);
-      setError(null);
+      })();
       
-      if (!token) {
-        setLoading(false);
-        router.push('/');
-        return;
-      }
+      // Hangisi önce biterse (ya fetch ya da timeout) o işleme alınır
+      const books = await Promise.race([fetchPromise, timeoutPromise]);
       
-      console.log("API isteği yapılıyor... Token:", token.substring(0, 15) + "...");
-      
-      // Önce aktif ödünç endpoint'ini dene
-      const response = await fetch('/api/borrows/active', {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Cache-Control': 'no-cache, no-store, must-revalidate'
-        }
-      });
-      
-      console.log('API yanıt durumu:', response.status, response.statusText);
-
-      if (!response.ok) {
-        console.log('API yanıtı başarısız, genel ödünç API endpoint\'ini deneniyor');
-        // Aktif ödünç endpoint'i başarısız olursa, genel ödünç endpoint'ini dene
-        const allBorrowsResponse = await fetch('/api/borrows', {
-          headers: {
-            'Authorization': `Bearer ${token}`,
-            'Cache-Control': 'no-cache, no-store, must-revalidate'
-          }
-        });
-        
-        if (!allBorrowsResponse.ok) {
-          setError("Verileri yüklerken bir hata oluştu: " + response.status);
-          return;
-        }
-        
-        const allBorrows = await allBorrowsResponse.json();
-        console.log('Tüm ödünçler yanıt verisi:', allBorrows);
-        
-        // Sadece iade edilmemiş ödünçleri filtrele
-        const activeBorrows = allBorrows
-          .filter((borrow: any) => !borrow.returnDate)
-          .map((borrow: any) => ({
-            id: borrow.id,
-            title: borrow.book.title,
-            author: borrow.book.author,
-            published: borrow.book.published || 2024,
-            borrowDate: borrow.borrowDate,
-            returnDate: borrow.returnDate,
-            bookId: borrow.bookId
-          }));
-        
-        if (activeBorrows && activeBorrows.length > 0) {
-          setBorrowedBooks(activeBorrows);
-          setError(null);
-        } else {
-          setBorrowedBooks([]);
-          setError("Henüz ödünç aldığınız kitap bulunmuyor.");
-        }
-        return;
-      }
-
-      const data = await response.json();
-      console.log('API yanıt verisi:', data);
-      
-      if (data && Array.isArray(data) && data.length > 0) {
-        setBorrowedBooks(data);
-        setError(null);
-      } else {
-        // Boş ödünç listesi
+      // Boş döndüyse boş array ile güncelle
+      if (!books || !Array.isArray(books)) {
         setBorrowedBooks([]);
-        setError("Henüz ödünç aldığınız kitap bulunmuyor.");
+      } else {
+        setBorrowedBooks(books);
       }
-    } catch (error) {
-      console.error('API hatası:', error);
-      setBorrowedBooks([]);
-      setError("API bağlantı hatası: " + (error instanceof Error ? error.message : String(error)));
+      
+      console.log("Ödünç kitapları getirme işlemi tamamlandı");
+    } catch (error: any) {
+      console.error("Ödünç alınan kitaplar alınamadı:", error);
+      toast.error("Kitap bilgileri yüklenirken bir hata oluştu: " + error.message);
+      setBorrowedBooks([]); // Hata durumunda boş array atıyoruz
     } finally {
-      setLoading(false);
+      setIsBooksLoading(false);
     }
-  };
+  }, []);
+
+  // useEffect bağımlılıkları düzeltildi
+  useEffect(() => {
+    const token = localStorage.getItem('token');
+    if (token) {
+      fetchUserProfile();
+      fetchBorrowedBooks();
+      fetchFavoriteBooks(token);
+    }
+  }, [fetchUserProfile, fetchBorrowedBooks]);
 
   // Favori kitapları API'den al
   const fetchFavoriteBooks = async (token: string) => {
@@ -234,8 +225,7 @@ export default function Dashboard() {
       
       const response = await fetch('/api/favorites', {
         headers: {
-          'Authorization': `Bearer ${token}`,
-          'Cache-Control': 'no-cache, no-store, must-revalidate'
+          'Authorization': `Bearer ${token}`
         }
       });
       
@@ -247,11 +237,36 @@ export default function Dashboard() {
         return;
       }
 
-      const data = await response.json();
-      console.log('Favori kitaplar yanıt verisi:', data);
+      const favorites = await response.json();
+      console.log('Favori kitaplar yanıt verisi:', favorites);
       
-      if (data && Array.isArray(data) && data.length > 0) {
-        setFavoriteBooks(data);
+      if (favorites && Array.isArray(favorites) && favorites.length > 0) {
+        // Favori kitapların detaylarını al
+        const bookPromises = favorites.map((favorite: any) => 
+          fetch(`/api/books/${favorite.bookId}`, {
+            headers: {
+              'Authorization': `Bearer ${token}`
+            }
+          })
+          .then(res => {
+            if (!res.ok) throw new Error(`Kitap getirilemedi: ${favorite.bookId}`);
+            return res.json();
+          })
+          .then(book => ({
+            ...book,
+            favoriteId: favorite.id
+          }))
+          .catch(err => {
+            console.error(`Favori kitap detayı alınamadı: ${favorite.bookId}`, err);
+            return null;
+          })
+        );
+        
+        const books = await Promise.all(bookPromises);
+        const validBooks = books.filter(book => book !== null);
+        
+        console.log(`${validBooks.length} favori kitap detayı alındı`);
+        setFavoriteBooks(validBooks);
       } else {
         setFavoriteBooks([]);
       }
@@ -261,35 +276,27 @@ export default function Dashboard() {
     }
   };
 
-  // Tamamlanmış ödünç almaları API'den al
-  const fetchCompletedBooks = async (token: string) => {
+  // Tamamlanmış ödünçleri almak için yeni fonksiyon
+  const fetchCompletedBorrows = async (token: string) => {
     try {
-      if (!token) {
-        return;
-      }
-      
-      console.log("Tamamlanmış ödünç alma isteği yapılıyor...");
-      
-      // Tüm ödünç almaları getir
       const response = await fetch('/api/borrows', {
         headers: {
-          'Authorization': `Bearer ${token}`,
-          'Cache-Control': 'no-cache, no-store, must-revalidate'
+          'Authorization': `Bearer ${token}`
         }
       });
       
       if (!response.ok) {
-        console.error('Ödünç almaları getirme hatası:', response.status);
+        console.error("Ödünç alma kayıtları alınamadı:", response.status);
         return;
       }
-
+      
       const borrows = await response.json();
       
       // Tamamlanmış (iade edilmiş) ödünç almaları filtrele
       const completed = borrows.filter((borrow: any) => borrow.returnDate !== null);
       setCompletedBooks(completed.length);
     } catch (error) {
-      console.error('Tamamlanmış ödünç alma sayısı getirme hatası:', error);
+      console.error("Tamamlanmış ödünç alma sayısı alınamadı:", error);
     }
   };
 
@@ -388,11 +395,69 @@ export default function Dashboard() {
     const token = localStorage.getItem('token');
     if (token) {
       setLoading(true);
-      fetchUserProfile(token);
-      fetchBorrowedBooks(token);
+      fetchUserProfile();
+      fetchBorrowedBooks();
       fetchFavoriteBooks(token);
-      fetchCompletedBooks(token);
     }
+  };
+
+  // Yükleme durumunu kontrol eden yardımcı fonksiyon
+  const isLoading = isUserLoading || isBooksLoading;
+  
+  // Bu alan dashboard içinde - ödünç alınan kitaplar bölümünde render edilecek
+  const renderBorrowedBooks = () => {
+    if (isBooksLoading) {
+      return (
+        <div className="dashboard-loading">
+          <div className="dashboard-spinner"></div>
+          <p>Kitaplar yükleniyor... ({borrowedBooks.length} kitap alındı)</p>
+        </div>
+      );
+    }
+    
+    if (borrowedBooks.length === 0) {
+      return (
+        <div className="bg-blue-900/10 border border-blue-800/30 rounded-xl p-8 text-center">
+          <svg className="w-16 h-16 mx-auto text-blue-800/50 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
+          </svg>
+          <p className="text-gray-300 text-lg">Henüz ödünç aldığın kitap yok.</p>
+          <button 
+            onClick={() => router.push('/books')}
+            className="mt-4 bg-blue-900/40 hover:bg-blue-800/60 text-blue-200 font-medium py-2.5 px-5 rounded-lg border border-blue-800/40 transition-all duration-200"
+          >
+            Kitapları Keşfet
+          </button>
+        </div>
+      );
+    }
+    
+    return (
+      <div className="dashboard-books-grid">
+        {borrowedBooks.map((book) => (
+          <div key={book.id} className="dashboard-book-card">
+            <h3 className="dashboard-book-title">{book.title}</h3>
+            <div className="dashboard-book-author">{book.author}, {book.published}</div>
+            <div className="dashboard-book-dates">
+              <div>
+                <div className="dashboard-date-label">Alınma Tarihi</div>
+                <div className="dashboard-borrow-date">
+                  {book.borrowDate ? new Date(book.borrowDate).toLocaleDateString('tr-TR') : 'Tarih bilgisi yok'}
+                </div>
+              </div>
+              <div>
+                <div className="dashboard-date-label">Bitiş Tarihi</div>
+                <div className="dashboard-return-date">
+                  {book.returnDate 
+                    ? new Date(book.returnDate).toLocaleDateString('tr-TR')
+                    : "Henüz iade edilmedi"}
+                </div>
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+    );
   };
 
   return (
@@ -510,50 +575,7 @@ export default function Dashboard() {
               </div>
             )}
             
-            {loading ? (
-              <div className="dashboard-loading">
-                <div className="dashboard-spinner"></div>
-                <p>Kitaplar yükleniyor...</p>
-              </div>
-            ) : borrowedBooks.length > 0 ? (
-              <div className="dashboard-books-grid">
-                {borrowedBooks.map((book) => (
-                  <div key={book.id} className="dashboard-book-card">
-                    <h3 className="dashboard-book-title">{book.title}</h3>
-                    <div className="dashboard-book-author">{book.author}, {book.published}</div>
-                    <div className="dashboard-book-dates">
-                      <div>
-                        <div className="dashboard-date-label">Alınma Tarihi</div>
-                        <div className="dashboard-borrow-date">
-                          {new Date(book.borrowDate).toLocaleDateString('tr-TR')}
-                        </div>
-                      </div>
-                      <div>
-                        <div className="dashboard-date-label">Bitiş Tarihi</div>
-                        <div className="dashboard-return-date">
-                          {book.returnDate 
-                            ? new Date(book.returnDate).toLocaleDateString('tr-TR')
-                            : "Henüz iade edilmedi"}
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <div className="bg-blue-900/10 border border-blue-800/30 rounded-xl p-8 text-center">
-                <svg className="w-16 h-16 mx-auto text-blue-800/50 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
-                </svg>
-                <p className="text-gray-300 text-lg">Henüz ödünç aldığın kitap yok.</p>
-                <button 
-                  onClick={() => router.push('/books')}
-                  className="mt-4 bg-blue-900/40 hover:bg-blue-800/60 text-blue-200 font-medium py-2.5 px-5 rounded-lg border border-blue-800/40 transition-all duration-200"
-                >
-                  Kitapları Keşfet
-                </button>
-              </div>
-            )}
+            {renderBorrowedBooks()}
           </div>
 
           {/* Favori Kitaplar Bölümü */}

@@ -1,60 +1,9 @@
 import { NextResponse } from 'next/server';
 import { PrismaClient } from '@prisma/client';
-import bcrypt from 'bcryptjs';
+import bcrypt from 'bcrypt';
 
 const prisma = new PrismaClient();
 
-/**
- * @swagger
- * /api/auth/register:
- *   post:
- *     summary: Yeni kullanıcı kaydı oluşturur
- *     description: Yeni bir kullanıcı hesabı oluşturur ve veritabanına kaydeder
- *     tags:
- *       - Authentication
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *             required:
- *               - name
- *               - email
- *               - password
- *             properties:
- *               name:
- *                 type: string
- *                 description: Kullanıcının tam adı
- *               email:
- *                 type: string
- *                 format: email
- *                 description: Kullanıcının email adresi
- *               password:
- *                 type: string
- *                 format: password
- *                 description: Kullanıcının şifresi
- *     responses:
- *       201:
- *         description: Kullanıcı başarıyla oluşturuldu
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 id:
- *                   type: string
- *                 name:
- *                   type: string
- *                 email:
- *                   type: string
- *                 role:
- *                   type: string
- *       400:
- *         description: Email adresi zaten kullanımda
- *       500:
- *         description: Sunucu hatası
- */
 export async function POST(request: Request) {
   try {
     const { name, email, password } = await request.json();
@@ -123,4 +72,4 @@ export async function POST(request: Request) {
   } finally {
     await prisma.$disconnect();
   }
-} 
+}

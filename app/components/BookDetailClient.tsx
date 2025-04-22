@@ -23,6 +23,13 @@ interface Book {
   } | null;
 }
 
+// User tipi
+interface User {
+  id: string;
+  name: string;
+  email: string;
+}
+
 // Props tipi
 interface BookDetailClientProps {
   book: Book;
@@ -41,7 +48,7 @@ export default function BookDetailClient({ book }: BookDetailClientProps) {
   const [isBorrowing, setIsBorrowing] = useState<boolean>(false);
   const [actionMessage, setActionMessage] = useState<string | null>(null);
   const [messageType, setMessageType] = useState<'success' | 'error' | null>(null);
-  const [currentUser, setCurrentUser] = useState<any>({
+  const [currentUser, setCurrentUser] = useState<User>({
     id: '',
     name: '',
     email: ''
@@ -70,75 +77,31 @@ export default function BookDetailClient({ book }: BookDetailClientProps) {
 
   // Kitabı ödünç alma işlemi
   const handleBorrowBook = async () => {
+    setIsBorrowing(true);
+    setActionMessage(null);
+
     try {
-      if (!bookData || !bookData.available) return;
-      
-      const token = localStorage.getItem('token');
-      if (!token) {
-        router.push('/login');
-        return;
-      }
-      
-      setIsBorrowing(true);
-      setActionMessage(null);
-      setMessageType(null);
-      
-      console.log(`Kitap ödünç alma işlemi başlatılıyor: ID=${bookData.id}, User=${currentUser.id}`);
-      
-      const response = await fetch(`/api/books/${bookData.id}`, {
-        method: 'PATCH',
+      const response = await fetch(`/api/books/${bookData.id}/borrow`, {
+        method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
         },
-        body: JSON.stringify({
-          action: 'borrow',
-          userId: currentUser.id
-        }),
+        body: JSON.stringify({ userId: currentUser.id }),
       });
-      
-      console.log('Ödünç alma yanıtı:', response.status, response.statusText);
-      
-      // Yanıtı tek seferde JSON'a dönüştür ve sakla
-      const responseData = await response.json();
-      console.log('Ödünç alma yanıt verisi:', responseData);
-      
+
+      const data = await response.json();
+
       if (!response.ok) {
-        throw new Error(responseData.error || 'Kitap ödünç alınırken bir hata oluştu');
+        throw new Error(data.error || 'Kitap ödünç alınamadı');
       }
-      
-      // Ödünç alma kaydının ID'sini doğru şekilde al
-      const borrowId = responseData.borrowId || 'temp-id';
-      console.log('Oluşturulan ödünç ID:', borrowId);
-      
-      // Başarılı yanıtta, response.json() yerine zaten parse edilmiş responseData kullan
-      setBookData({
-        ...bookData,
-        available: false,
-        currentBorrow: {
-          id: borrowId,
-          userId: currentUser.id,
-          borrowDate: new Date().toISOString(),
-          user: {
-            id: currentUser.id,
-            name: currentUser.name,
-            email: currentUser.email || ''
-          }
-        }
-      });
-      
-      setActionMessage('Kitap başarıyla ödünç alındı!');
+
+      setBookData(data.book);
+      setActionMessage('Kitap başarıyla ödünç alındı.');
       setMessageType('success');
-      
-      // Veritabanının güncellenebilmesi için daha uzun bir bekleme süresi
-      setTimeout(() => {
-        console.log('Dashboard sayfasına yönlendiriliyor...');
-        router.push('/dashboard');
-      }, 5000);
-      
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('Kitap ödünç alma hatası:', err);
-      setActionMessage(err.message || 'Kitap ödünç alınırken bir hata oluştu');
+      const errorMessage = err instanceof Error ? err.message : 'Kitap ödünç alınırken bir hata oluştu';
+      setActionMessage(errorMessage);
       setMessageType('error');
     } finally {
       setIsBorrowing(false);
@@ -147,68 +110,31 @@ export default function BookDetailClient({ book }: BookDetailClientProps) {
   
   // Kitabı iade etme işlemi
   const handleReturnBook = async () => {
+    setIsBorrowing(true);
+    setActionMessage(null);
+
     try {
-      if (!bookData || bookData.available) return;
-      
-      const token = localStorage.getItem('token');
-      if (!token) {
-        router.push('/login');
-        return;
-      }
-      
-      // Kullanıcı sadece kendi ödünç aldığı kitabı iade edebilir
-      if (bookData.currentBorrow?.userId !== currentUser.id) {
-        setActionMessage('Sadece kitabı ödünç alan kullanıcı iade edebilir');
-        setMessageType('error');
-        return;
-      }
-      
-      setIsBorrowing(true);
-      setActionMessage(null);
-      setMessageType(null);
-      
-      console.log(`Kitap iade işlemi başlatılıyor: ID=${bookData.id}, User=${currentUser.id}`);
-      
-      const response = await fetch(`/api/books/${bookData.id}`, {
-        method: 'PATCH',
+      const response = await fetch(`/api/books/${bookData.id}/return`, {
+        method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
         },
-        body: JSON.stringify({
-          action: 'return'
-        }),
+        body: JSON.stringify({ userId: currentUser.id }),
       });
-      
-      console.log('İade yanıtı:', response.status, response.statusText);
-      
-      // Yanıtı tek seferde JSON'a dönüştür ve sakla
-      const responseData = await response.json();
-      console.log('İade yanıt verisi:', responseData);
-      
+
+      const data = await response.json();
+
       if (!response.ok) {
-        throw new Error(responseData.error || 'Kitap iade edilirken bir hata oluştu');
+        throw new Error(data.error || 'Kitap iade edilemedi');
       }
-      
-      // Başarılı yanıtta, response.json() yerine zaten parse edilmiş responseData kullan
-      setBookData({
-        ...bookData,
-        available: true,
-        currentBorrow: null
-      });
-      
-      setActionMessage('Kitap başarıyla iade edildi!');
+
+      setBookData(data.book);
+      setActionMessage('Kitap başarıyla iade edildi.');
       setMessageType('success');
-      
-      // Veritabanının güncellenebilmesi için daha uzun bir bekleme süresi
-      setTimeout(() => {
-        console.log('Dashboard sayfasına yönlendiriliyor...');
-        router.push('/dashboard');
-      }, 5000);
-      
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('Kitap iade hatası:', err);
-      setActionMessage(err.message || 'Kitap iade edilirken bir hata oluştu');
+      const errorMessage = err instanceof Error ? err.message : 'Kitap iade edilirken bir hata oluştu';
+      setActionMessage(errorMessage);
       setMessageType('error');
     } finally {
       setIsBorrowing(false);
