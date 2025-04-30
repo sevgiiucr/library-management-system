@@ -1,8 +1,9 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 
-// AuthModal bileşeni - önce sildiğimiz bileşeni buraya taşıyoruz
+// AuthModal bileşeni - ortak modal yapısı
 interface AuthModalProps {
   isOpen: boolean;
   onClose: () => void;
@@ -23,10 +24,12 @@ const AuthModal: React.FC<AuthModalProps> = ({
   useEffect(() => {
     if (isOpen) {
       setIsVisible(true);
+      document.body.style.overflow = 'hidden'; // Arka planın kaydırılmasını engelle
     } else {
       const timer = setTimeout(() => {
         setIsVisible(false);
       }, 300);
+      document.body.style.overflow = 'auto'; // Kaydırmayı tekrar etkinleştir
       
       return () => clearTimeout(timer);
     }
@@ -36,19 +39,23 @@ const AuthModal: React.FC<AuthModalProps> = ({
 
   return (
     <div 
-      className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50"
+      className="fixed inset-0 z-50 bg-black/75 backdrop-blur-md"
+      style={{ backdropFilter: 'blur(4px)' }}
       onClick={onClose}
     >
-      <div 
-        className="bg-white dark:bg-gray-900 rounded-lg shadow-xl max-w-md w-full p-6 mx-4"
+      <div
+        className="absolute top-1/2 left-0 right-0 mx-auto bg-black/80 border border-gray-700 rounded-xl shadow-2xl w-full max-w-md p-6 transform -translate-y-1/2"
+        style={{
+          animation: 'modalOpen 0.3s ease-out forwards',
+        }}
         onClick={(e) => e.stopPropagation()}
       >
-        <h2 className="text-2xl font-bold mb-2 text-gray-900 dark:text-white">
+        <h2 className="text-xl font-bold mb-2 text-white text-center">
           {title}
         </h2>
         
         {description && (
-          <p className="mb-4 text-gray-600 dark:text-gray-300">
+          <p className="mb-4 text-gray-300 text-center">
             {description}
           </p>
         )}
@@ -59,7 +66,7 @@ const AuthModal: React.FC<AuthModalProps> = ({
 
         <button
           onClick={onClose}
-          className="mt-4 w-full inline-flex justify-center text-gray-500 hover:text-gray-600 focus:outline-none"
+          className="mt-4 w-full flex justify-center text-gray-400 hover:text-gray-200 transition-colors duration-150"
         >
           Kapat
         </button>
@@ -70,18 +77,37 @@ const AuthModal: React.FC<AuthModalProps> = ({
 
 /**
  * Giriş Yapma Modal Bileşeni
- * @param {boolean} isOpen - Modal'ın açık/kapalı durumu
- * @param {function} onClose - Modal'ı kapatma fonksiyonu
+ * 
+ * Kullanıcı giriş formunu içeren modal bileşenidir.
+ * Email ve şifre alanlarını içerir, giriş işlemini gerçekleştirir.
  */
-export function LoginModal({ isOpen, onClose }: { isOpen: boolean; onClose: () => void }) {
-  if (!isOpen) return null;
-  
+export function LoginModal({ 
+  isOpen, 
+  onClose, 
+  openRegisterModal 
+}: { 
+  isOpen: boolean; 
+  onClose: () => void;
+  openRegisterModal?: () => void;
+}) {
+  const [loading, setLoading] = useState(false);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
-  
+  const [rememberMe, setRememberMe] = useState(false);
+  const router = useRouter();
+
+  // Modal kapatıldığında formu sıfırla
+  useEffect(() => {
+    if (!isOpen) {
+      setError('');
+    }
+  }, [isOpen]);
+
+  // Form gönderildiğinde
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setLoading(true);
     setError('');
     
     try {
@@ -90,29 +116,42 @@ export function LoginModal({ isOpen, onClose }: { isOpen: boolean; onClose: () =
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ email, password }),
+        body: JSON.stringify({ email, password, rememberMe }),
       });
       
       const data = await response.json();
       
       if (!response.ok) {
-        throw new Error(data.error || 'Giriş yapılırken bir hata oluştu');
+        throw new Error(data.message || data.error || 'Kullanıcı adı veya şifre hatalı');
       }
       
-      localStorage.setItem('token', data.token);
+      // Başarılı giriş - accessToken'ı localStorage'da sakla
+      localStorage.setItem('accessToken', data.accessToken);
       localStorage.setItem('user', JSON.stringify(data.user));
+      
+      // Not: refreshToken otomatik olarak http-only cookie olarak ayarlandı
+      // ve JavaScript tarafından erişilemez, bu yüzden burada saklamıyoruz
+      
       onClose();
-      window.location.href = '/dashboard';
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Giriş yapılırken bir hata oluştu');
+      router.push('/dashboard');
+    } catch (err: any) {
+      console.error('Giriş hatası:', err);
+      setError(err.message || 'Bağlantı hatası. Lütfen tekrar deneyin');
+    } finally {
+      setLoading(false);
     }
   };
   
-  const openRegisterModal = () => {
-    onClose();
-    // Global event yerine doğrudan openRegister fonksiyonunu çağıracağız
-    const event = new CustomEvent('openRegisterModal');
-    window.dispatchEvent(event);
+  const switchToRegister = () => {
+    if (openRegisterModal) {
+      onClose();
+      openRegisterModal();
+    } else {
+      // Alternatif olay tabanlı yaklaşım
+      onClose();
+      const event = new CustomEvent('openRegisterModal');
+      window.dispatchEvent(event);
+    }
   };
   
   return (
@@ -120,60 +159,86 @@ export function LoginModal({ isOpen, onClose }: { isOpen: boolean; onClose: () =
       isOpen={isOpen} 
       onClose={onClose} 
       title="Giriş"
-      description="Kütüphane hizmetlerinden yararlanmak için giriş yapın.">
-      <form onSubmit={handleSubmit} className="space-y-4">
-        {error && (
-          <div className="p-3 bg-red-100 border border-red-200 text-red-500 rounded-md text-sm">
-            {error}
-          </div>
-        )}
+      description=""
+    >
+      {error && (
+        <div className="bg-red-900/50 border border-red-800 text-red-300 p-3 rounded-md mb-6">
+          <p>{error}</p>
+        </div>
+      )}
+
+      <form onSubmit={handleSubmit} className="space-y-6">
+        {/* Email input */}
         <div>
-          <label className="block text-gray-700 dark:text-gray-200 mb-2 text-sm">
+          <label htmlFor="email" className="block text-gray-300 mb-2 text-sm">
             E-posta
           </label>
           <input 
+            id="email"
             type="email" 
             value={email}
             onChange={(e) => setEmail(e.target.value)}
-            placeholder="ornek@mail.com"
             required
-            className="w-full p-3 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-md text-sm"
+            className="w-full p-3 bg-gray-700/80 border border-gray-600 rounded-lg text-sm text-white focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+            placeholder="ornek@email.com"
           />
         </div>
+
+        {/* Password input */}
         <div>
-          <label className="block text-gray-700 dark:text-gray-200 mb-2 text-sm">
+          <label htmlFor="password" className="block text-gray-300 mb-2 text-sm">
             Şifre
           </label>
           <input 
+            id="password"
             type="password"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
-            placeholder="••••••"
             required
-            className="w-full p-3 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-md text-sm"
+            className="w-full p-3 bg-gray-700/80 border border-gray-600 rounded-lg text-sm text-white focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+            placeholder="••••••••"
           />
         </div>
-        <div className="flex justify-between items-center mt-2">
-          <label className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-300">
-            <input type="checkbox" className="rounded text-primary-600 focus:ring-primary-500" />
+
+        {/* Remember me & Forgot password */}
+        <div className="flex justify-between items-center">
+          <label className="flex items-center gap-2 text-sm text-gray-300">
+            <input 
+              type="checkbox" 
+              checked={rememberMe}
+              onChange={(e) => setRememberMe(e.target.checked)}
+              className="rounded bg-gray-700 border-gray-600 text-blue-500 focus:ring-blue-500 focus:ring-offset-0"
+            />
             Beni hatırla
           </label>
-          <a href="#" className="text-sm text-primary-600 hover:text-primary-800 dark:text-primary-400">
-            Şifremi unuttum
+          <a href="#" className="text-sm text-blue-400 hover:text-blue-300 transition-colors">
+            Şifremi unuttum?
           </a>
         </div>
+
+        {/* Login button */}
         <button 
           type="submit"
-          className="w-full p-3 bg-primary-600 hover:bg-primary-700 text-white rounded-md font-medium mt-4 transition duration-150"
+          disabled={loading}
+          className="w-full p-3 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium mt-4 transition-colors duration-150 disabled:opacity-70 disabled:cursor-not-allowed"
         >
-          Giriş Yap
+          {loading ? (
+            <div className="flex items-center justify-center">
+              <svg className="animate-spin -ml-1 mr-2 h-5 w-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+              </svg>
+              Giriş yapılıyor...
+            </div>
+          ) : 'Giriş Yap'}
         </button>
-        <div className="text-center mt-4 text-sm text-gray-600 dark:text-gray-300">
+
+        <div className="text-center mt-4 text-sm text-gray-300">
           Hesabınız yok mu?{' '}
           <button 
             type="button"
-            onClick={openRegisterModal}
-            className="text-primary-600 hover:text-primary-800 dark:text-primary-400 font-medium"
+            onClick={switchToRegister}
+            className="text-blue-400 hover:text-blue-300 font-medium transition-colors"
           >
             Kayıt Ol
           </button>
@@ -196,22 +261,23 @@ export function RegisterModal({
 }: { 
   isOpen: boolean; 
   onClose: () => void;
-  onRegisterSuccess: () => void;
+  onRegisterSuccess?: () => void;
 }) {
-  if (!isOpen) return null;
-  
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
   
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
+    setLoading(true);
     
     if (password !== confirmPassword) {
       setError('Şifreler eşleşmiyor');
+      setLoading(false);
       return;
     }
     
@@ -230,10 +296,14 @@ export function RegisterModal({
         throw new Error(data.error || 'Kayıt sırasında bir hata oluştu');
       }
       
-      onRegisterSuccess();
+      if (onRegisterSuccess) {
+        onRegisterSuccess();
+      }
       onClose();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Kayıt sırasında bir hata oluştu');
+    } finally {
+      setLoading(false);
     }
   };
   
@@ -243,33 +313,36 @@ export function RegisterModal({
     window.dispatchEvent(event);
   };
   
+  if (!isOpen) return null;
+  
   return (
     <AuthModal 
       isOpen={isOpen} 
       onClose={onClose} 
       title="Yeni Hesap Oluştur"
-      description="Kütüphane hizmetlerini kullanmak için hesap oluşturun.">
+      description="Kütüphane hizmetlerinden yararlanmak için hesap oluşturun."
+    >
       <form onSubmit={handleSubmit} className="space-y-4">
         {error && (
-          <div className="p-3 bg-red-100 border border-red-200 text-red-500 rounded-md text-sm">
+          <div className="p-3 bg-red-900/50 border border-red-800 text-red-300 rounded-md text-sm">
             {error}
           </div>
         )}
         <div>
-          <label className="block text-gray-700 dark:text-gray-200 mb-2 text-sm">
-            İsim Soyisim
+          <label className="block text-gray-300 mb-2 text-sm">
+            Ad Soyad
           </label>
           <input 
             type="text" 
             value={name}
             onChange={(e) => setName(e.target.value)}
-            placeholder="Ahmet Yılmaz"
+            placeholder="Ad Soyad"
             required
-            className="w-full p-3 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-md text-sm"
+            className="w-full p-3 bg-gray-700/80 border border-gray-600 rounded-lg text-sm text-white focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
           />
         </div>
         <div>
-          <label className="block text-gray-700 dark:text-gray-200 mb-2 text-sm">
+          <label className="block text-gray-300 mb-2 text-sm">
             E-posta
           </label>
           <input 
@@ -278,11 +351,11 @@ export function RegisterModal({
             onChange={(e) => setEmail(e.target.value)}
             placeholder="ornek@mail.com"
             required
-            className="w-full p-3 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-md text-sm"
+            className="w-full p-3 bg-gray-700/80 border border-gray-600 rounded-lg text-sm text-white focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
           />
         </div>
         <div>
-          <label className="block text-gray-700 dark:text-gray-200 mb-2 text-sm">
+          <label className="block text-gray-300 mb-2 text-sm">
             Şifre
           </label>
           <input 
@@ -291,13 +364,12 @@ export function RegisterModal({
             onChange={(e) => setPassword(e.target.value)}
             placeholder="••••••"
             required
-            minLength={6}
-            className="w-full p-3 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-md text-sm"
+            className="w-full p-3 bg-gray-700/80 border border-gray-600 rounded-lg text-sm text-white focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
           />
         </div>
         <div>
-          <label className="block text-gray-700 dark:text-gray-200 mb-2 text-sm">
-            Şifre Tekrar
+          <label className="block text-gray-300 mb-2 text-sm">
+            Şifre (Tekrar)
           </label>
           <input 
             type="password"
@@ -305,22 +377,22 @@ export function RegisterModal({
             onChange={(e) => setConfirmPassword(e.target.value)}
             placeholder="••••••"
             required
-            minLength={6}
-            className="w-full p-3 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-md text-sm"
+            className="w-full p-3 bg-gray-700/80 border border-gray-600 rounded-lg text-sm text-white focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
           />
         </div>
         <button 
           type="submit"
-          className="w-full p-3 bg-primary-600 hover:bg-primary-700 text-white rounded-md font-medium mt-4 transition duration-150"
+          disabled={loading}
+          className="w-full p-3 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium mt-4 transition-colors duration-150 disabled:opacity-70 disabled:cursor-not-allowed"
         >
-          Hesap Oluştur
+          {loading ? 'Kaydediliyor...' : 'Kayıt Ol'}
         </button>
-        <div className="text-center mt-4 text-sm text-gray-600 dark:text-gray-300">
+        <div className="text-center mt-4 text-sm text-gray-300">
           Zaten hesabınız var mı?{' '}
           <button 
             type="button"
             onClick={openLoginModal}
-            className="text-primary-600 hover:text-primary-800 dark:text-primary-400 font-medium"
+            className="text-blue-400 hover:text-blue-300 font-medium transition-colors"
           >
             Giriş Yap
           </button>

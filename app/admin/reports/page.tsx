@@ -33,6 +33,7 @@ export default function AdminReportsPage() {
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
   const [userToken, setUserToken] = useState<string | null>(null);
+  const [isAdmin, setIsAdmin] = useState<boolean | null>(null);
   const router = useRouter();
   const [isClient, setIsClient] = useState(false);
 
@@ -41,84 +42,121 @@ export default function AdminReportsPage() {
   const [hoveredBook, setHoveredBook] = useState<string | null>(null);
   const [hoveredUser, setHoveredUser] = useState<string | null>(null);
 
+  // Kullanıcı token'ını al ve yetkisini kontrol et
   useEffect(() => {
-    const token = localStorage.getItem('token');
+    console.log("Admin kontrolü başlatılıyor...");
+    
+    // Token kontrolü
+    const token = localStorage.getItem('accessToken');
     setUserToken(token);
     
     if (!token) {
-      router.push('/');
+      console.log("Token bulunamadı, admin değil");
+      setIsAdmin(false);
       return;
     }
 
-    const checkAdmin = async () => {
-      try {
-        const response = await fetch('/api/auth/check-admin', {
-          headers: {
-            'Authorization': `Bearer ${token}`
-          }
-        });
-        
-        if (!response.ok) {
-          router.push('/');
-        }
-      } catch (err) {
-        console.error('Yetki kontrolü hatası:', err);
-        router.push('/');
+    // Kullanıcı verilerini kontrol et
+    const userStr = localStorage.getItem('user');
+    if (!userStr) {
+      console.log("Kullanıcı verileri bulunamadı, admin değil");
+      setIsAdmin(false);
+      return;
+    }
+
+    try {
+      const userData = JSON.parse(userStr);
+      console.log("Kullanıcı rolü:", userData.role);
+      
+      // Kullanıcı admin mi?
+      if (userData.role.toLowerCase() === 'admin') {
+        console.log("Kullanıcı admin, sayfa yükleniyor");
+        setIsAdmin(true);
+      } else {
+        console.log("Kullanıcı admin değil");
+        setIsAdmin(false);
       }
-    };
-    
-    checkAdmin();
-  }, [router]);
+    } catch (e) {
+      console.error("Kullanıcı verilerini ayrıştırma hatası:", e);
+      setIsAdmin(false);
+    }
+  }, []);
 
   useEffect(() => {
     setIsClient(true);
     
     const fetchStats = async () => {
+      if (!isAdmin || !userToken) return;
+      
       setLoading(true);
       setError("");
 
       try {
-        const storedToken = localStorage.getItem('token');
-        if (storedToken) {
-          setUserToken(storedToken);
-          
-          const response = await fetch('/api/reports/stats', {
+        const response = await fetch('/api/stats', {
           headers: {
-              'Authorization': `Bearer ${storedToken}`
+            'Authorization': `Bearer ${userToken}`
           }
         });
         
         if (response.ok) {
           const data = await response.json();
           setStats(data);
-          } else {
-            console.log("Falling back to client-side calculation");
-            
+        } else {
+          console.log("Falling back to client-side calculation");
+          
+          try {
+            console.log("Fetching books data...");
             const booksResponse = await fetch('/api/books', {
               headers: {
-                'Authorization': `Bearer ${storedToken}`
+                'Authorization': `Bearer ${userToken}`
               }
             });
+            console.log("Books API response:", booksResponse.status, booksResponse.statusText);
             
+            console.log("Fetching users data...");
             const usersResponse = await fetch('/api/users', {
               headers: {
-                'Authorization': `Bearer ${storedToken}`
+                'Authorization': `Bearer ${userToken}`
               }
             });
+            console.log("Users API response:", usersResponse.status, usersResponse.statusText);
             
+            console.log("Fetching borrows data...");
             const borrowsResponse = await fetch('/api/borrows', {
               headers: {
-                'Authorization': `Bearer ${storedToken}`
+                'Authorization': `Bearer ${userToken}`
               }
             });
+            console.log("Borrows API response:", borrowsResponse.status, borrowsResponse.statusText);
             
-            if (!booksResponse.ok || !usersResponse.ok || !borrowsResponse.ok) {
-              throw new Error("Failed to fetch data");
+            // Check each API response individually
+            if (!booksResponse.ok) {
+              setError(`Kitap verileri alınamadı: ${booksResponse.status} ${booksResponse.statusText}`);
+              setLoading(false);
+              return;
             }
             
+            if (!usersResponse.ok) {
+              setError(`Kullanıcı verileri alınamadı: ${usersResponse.status} ${usersResponse.statusText}`);
+              setLoading(false);
+              return;
+            }
+            
+            if (!borrowsResponse.ok) {
+              setError(`Ödünç alma verileri alınamadı: ${borrowsResponse.status} ${borrowsResponse.statusText}`);
+              setLoading(false);
+              return;
+            }
+
+            console.log("All API responses successful, parsing JSON...");
             const books = await booksResponse.json();
             const users = await usersResponse.json();
             const borrows = await borrowsResponse.json();
+            console.log("Data fetched successfully. Counts:", {
+              books: books.length,
+              users: users.length,
+              borrows: borrows.length
+            });
             
             const totalBooks = books.length;
             const availableBooks = books.filter((book: any) => !book.borrowed).length;
@@ -144,15 +182,17 @@ export default function AdminReportsPage() {
             // Toplam günlük işlem sayısı
             const dailyTransactions = dailyBorrows + dailyReturns;
             
+            // Güvenli şekilde kitap ödünç sayılarını hesaplama
             const bookBorrowCounts: Record<string, {count: number, book: any}> = {};
+            
+            books.forEach((book: any) => {
+              bookBorrowCounts[book.id] = { count: 0, book };
+            });
+            
             borrows.forEach((borrow: any) => {
-              if (!bookBorrowCounts[borrow.bookId]) {
-                bookBorrowCounts[borrow.bookId] = {
-                  count: 0,
-                  book: books.find((b: any) => b.id === borrow.bookId)
-                };
+              if (bookBorrowCounts[borrow.bookId]) {
+                bookBorrowCounts[borrow.bookId].count++;
               }
-              bookBorrowCounts[borrow.bookId].count++;
             });
             
             const mostBorrowedBooks = Object.values(bookBorrowCounts)
@@ -197,9 +237,10 @@ export default function AdminReportsPage() {
               mostActiveUsers,
               dailyTransactions
             });
+          } catch (err) {
+            console.error("Error fetching stats:", err);
+            setError("İstatistikler yüklenirken bir hata oluştu.");
           }
-        } else {
-          setError("Oturum bulunamadı. Lütfen giriş yapın.");
         }
       } catch (err) {
         console.error("Error fetching stats:", err);
@@ -212,7 +253,85 @@ export default function AdminReportsPage() {
     if (isClient) {
       fetchStats();
     }
-  }, [isClient]);
+  }, [isClient, isAdmin, userToken]);
+
+  // Admin değilse erişim reddedildi mesajı göster
+  if (isAdmin === false) {
+    return (
+      <div className="min-h-screen bg-gray-900 text-white">
+        <Navbar />
+        <div style={{ 
+          maxWidth: '600px', 
+          margin: '0 auto', 
+          padding: '2rem 1rem',
+          textAlign: 'center'
+        }}>
+          <h1 style={{ 
+            fontSize: '2rem', 
+            marginBottom: '1rem', 
+            color: '#ef4444'
+          }}>
+            Erişim Reddedildi
+          </h1>
+          <p style={{ 
+            fontSize: '1.125rem', 
+            marginBottom: '2rem',
+            color: 'rgba(255, 255, 255, 0.7)'
+          }}>
+            Bu sayfaya erişmek için admin yetkilerine sahip olmanız gerekmektedir.
+          </p>
+          <Link href="/" style={{
+            display: 'inline-block',
+            padding: '0.75rem 1.5rem',
+            backgroundColor: 'rgba(30, 41, 59, 0.7)',
+            color: '#ffffff',
+            borderRadius: '0.375rem',
+            fontWeight: 'bold',
+            cursor: 'pointer',
+            transition: 'background-color 0.15s ease-in-out',
+            fontSize: '0.875rem',
+            textDecoration: 'none',
+            marginBottom: '2rem',
+            border: '1px solid rgba(255, 255, 255, 0.1)'
+          }}>
+            Ana Sayfaya Dön
+          </Link>
+        </div>
+      </div>
+    );
+  }
+
+  // Hala kontrol ediliyorsa yükleniyor göster
+  if (isAdmin === null) {
+    return (
+      <div className="min-h-screen bg-gray-900 text-white">
+        <Navbar />
+        <div style={{ 
+          maxWidth: '600px', 
+          margin: '0 auto', 
+          padding: '2rem 1rem',
+          textAlign: 'center'
+        }}>
+          <h1 style={{ 
+            fontSize: '2rem', 
+            marginBottom: '1rem'
+          }}>
+            Yetki Kontrol Ediliyor...
+          </h1>
+          <div style={{ 
+            display: 'inline-block',
+            width: '3rem',
+            height: '3rem',
+            borderRadius: '50%',
+            borderTop: '3px solid #3b82f6',
+            borderRight: '3px solid transparent',
+            animation: 'spin 1s linear infinite',
+            marginBottom: '1rem'
+          }}></div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div style={{ minHeight: '100vh', backgroundColor: '#000', color: '#fff' }}>

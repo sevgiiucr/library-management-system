@@ -18,6 +18,7 @@ export default function AdminUsersPage() {
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
   const [userToken, setUserToken] = useState<string | null>(null);
+  const [isAdmin, setIsAdmin] = useState<boolean | null>(null);
   const router = useRouter();
   
   // Form states
@@ -33,68 +34,134 @@ export default function AdminUsersPage() {
 
   // Kullanıcı token'ını al ve yetkisini kontrol et
   useEffect(() => {
-    const token = localStorage.getItem('token');
+    console.log("Admin kontrolü başlatılıyor...");
+    
+    // Token kontrolü
+    const token = localStorage.getItem('accessToken');
     setUserToken(token);
     
     if (!token) {
-      router.push('/');
+      console.log("Token bulunamadı, admin değil");
+      setIsAdmin(false);
       return;
     }
 
-    // Admin yetkisini kontrol et
-    const checkAdmin = async () => {
-      try {
-        const response = await fetch('/api/auth/check-admin', {
-          headers: {
-            'Authorization': `Bearer ${token}`
-          }
-        });
-        
-        if (!response.ok) {
-          router.push('/');
-        }
-      } catch (err) {
-        console.error('Yetki kontrolü hatası:', err);
-        router.push('/');
-      }
-    };
-    
-    checkAdmin();
-  }, [router]);
-
-  // Kullanıcıları getir
-  useEffect(() => {
-    const fetchUsers = async () => {
-      if (!userToken) return;
-      
-      try {
-        setLoading(true);
-        const response = await fetch('/api/users', {
-          headers: {
-            'Authorization': `Bearer ${userToken}`
-          }
-        });
-        
-        if (response.ok) {
-          const data = await response.json();
-          setUsers(data);
-          setError(null);
-        } else {
-          const errorData = await response.json();
-          setError(errorData.error || 'Kullanıcılar getirilirken bir hata oluştu');
-        }
-      } catch (err) {
-        console.error('Kullanıcıları getirme hatası:', err);
-        setError('Kullanıcılar getirilirken bir hata oluştu');
-      } finally {
-        setLoading(false);
-      }
-    };
-    
-    if (userToken) {
-      fetchUsers();
+    // Kullanıcı verilerini kontrol et
+    const userStr = localStorage.getItem('user');
+    if (!userStr) {
+      console.log("Kullanıcı verileri bulunamadı, admin değil");
+      setIsAdmin(false);
+      return;
     }
-  }, [userToken]);
+
+    try {
+      const userData = JSON.parse(userStr);
+      console.log("Kullanıcı rolü:", userData.role);
+      
+      // Kullanıcı admin mi?
+      if (userData.role.toLowerCase() === 'admin') {
+        console.log("Kullanıcı admin, sayfa yükleniyor");
+        setIsAdmin(true);
+        fetchUsers(token);
+      } else {
+        console.log("Kullanıcı admin değil");
+        setIsAdmin(false);
+      }
+    } catch (e) {
+      console.error("Kullanıcı verilerini ayrıştırma hatası:", e);
+      setIsAdmin(false);
+    }
+  }, []);
+
+  // Kullanıcıları getiren fonksiyon
+  const fetchUsers = async (tokenToUse: string) => {
+    try {
+      setLoading(true);
+      console.log("Kullanıcıları getirme işlemi başlatılıyor...");
+      
+      // Token yenileme mekanizmasını kullanalım
+      const fetchWithTokenRefresh = async (url: string, options: { headers?: Record<string, string> } = {}) => {
+        try {
+          // İlk deneme mevcut token ile
+          const response = await fetch(url, {
+            ...options,
+            headers: {
+              ...options.headers,
+              'Authorization': `Bearer ${tokenToUse}`
+            }
+          });
+
+          // 401 hatası alırsak token yenileme dene
+          if (response.status === 401) {
+            console.log("Token geçersiz, yenileme deneniyor...");
+            // Token yenileme
+            const refreshResponse = await fetch('/api/auth/refresh-token', {
+              method: 'POST',
+              credentials: 'include' // Cookie'leri dahil et
+            });
+
+            if (refreshResponse.ok) {
+              console.log("Token yenilendi, yeni token ile istek tekrarlanıyor");
+              const data = await refreshResponse.json();
+              // Yeni token'ı kaydet
+              localStorage.setItem('accessToken', data.accessToken);
+              setUserToken(data.accessToken);
+              
+              // Yeni token ile tekrar dene
+              return fetch(url, {
+                ...options,
+                headers: {
+                  ...options.headers,
+                  'Authorization': `Bearer ${data.accessToken}`
+                }
+              });
+            } else {
+              console.log("Token yenilenemedi");
+              localStorage.removeItem('accessToken');
+              localStorage.removeItem('user');
+              setIsAdmin(false);
+              return null;
+            }
+          }
+          
+          return response;
+        } catch (error) {
+          console.error('API isteği hatası:', error);
+          return null;
+        }
+      };
+      
+      const response = await fetchWithTokenRefresh('/api/users');
+      
+      if (response && response.ok) {
+        console.log("Kullanıcılar başarıyla alındı");
+        const data = await response.json();
+        setUsers(data);
+        setError(null);
+      } else {
+        console.log("Kullanıcıları alma hatası:", response?.status);
+        
+        // API'ye bağlanamadık, ancak sadece hata göster, yönlendirme yapma
+        const errorText = response ? await response.text() : 'Bağlantı hatası';
+        try {
+          const errorData = JSON.parse(errorText);
+          setError(errorData.error || 'Kullanıcılar getirilirken bir hata oluştu');
+        } catch (e) {
+          setError('Kullanıcılar getirilirken bir hata oluştu');
+        }
+        
+        // 401 veya 403 hatası durumunda admin değil
+        if (response && (response.status === 401 || response.status === 403)) {
+          setIsAdmin(false);
+        }
+      }
+    } catch (err) {
+      console.error('Kullanıcıları getirme hatası:', err);
+      setError('Kullanıcılar getirilirken bir hata oluştu');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   // Form submit handler
   const handleSubmit = async (e: React.FormEvent) => {
@@ -404,6 +471,87 @@ export default function AdminUsersPage() {
     border: '1px solid rgba(239, 68, 68, 0.3)',
     color: '#ef4444',
   };
+
+  // Ana admin paneli sayfasına dönme butonları için stil
+  const backButtonStyle = {
+    display: 'inline-block',
+    padding: '0.75rem 1.5rem',
+    backgroundColor: 'rgba(30, 41, 59, 0.7)',
+    color: '#ffffff',
+    borderRadius: '0.375rem',
+    fontWeight: 'bold',
+    cursor: 'pointer',
+    transition: 'background-color 0.15s ease-in-out',
+    fontSize: '0.875rem',
+    textDecoration: 'none',
+    marginBottom: '2rem',
+    border: '1px solid rgba(255, 255, 255, 0.1)',
+  };
+
+  // Admin değilse erişim reddedildi mesajı göster
+  if (isAdmin === false) {
+    return (
+      <div className="min-h-screen bg-gray-900 text-white">
+        <Navbar />
+        <div style={{ 
+          maxWidth: '600px', 
+          margin: '0 auto', 
+          padding: '2rem 1rem',
+          textAlign: 'center'
+        }}>
+          <h1 style={{ 
+            fontSize: '2rem', 
+            marginBottom: '1rem', 
+            color: '#ef4444'
+          }}>
+            Erişim Reddedildi
+          </h1>
+          <p style={{ 
+            fontSize: '1.125rem', 
+            marginBottom: '2rem',
+            color: 'rgba(255, 255, 255, 0.7)'
+          }}>
+            Bu sayfaya erişmek için admin yetkilerine sahip olmanız gerekmektedir.
+          </p>
+          <Link href="/" style={backButtonStyle}>
+            Ana Sayfaya Dön
+          </Link>
+        </div>
+      </div>
+    );
+  }
+
+  // Hala kontrol ediliyorsa yükleniyor göster
+  if (isAdmin === null) {
+    return (
+      <div className="min-h-screen bg-gray-900 text-white">
+        <Navbar />
+        <div style={{ 
+          maxWidth: '600px', 
+          margin: '0 auto', 
+          padding: '2rem 1rem',
+          textAlign: 'center'
+        }}>
+          <h1 style={{ 
+            fontSize: '2rem', 
+            marginBottom: '1rem'
+          }}>
+            Yetki Kontrol Ediliyor...
+          </h1>
+          <div style={{ 
+            display: 'inline-block',
+            width: '3rem',
+            height: '3rem',
+            borderRadius: '50%',
+            borderTop: '3px solid #3b82f6',
+            borderRight: '3px solid transparent',
+            animation: 'spin 1s linear infinite',
+            marginBottom: '1rem'
+          }}></div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gray-900 text-white">

@@ -28,6 +28,7 @@ export default function AdminBorrowsPage() {
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
   const [userToken, setUserToken] = useState<string | null>(null);
+  const [isAdmin, setIsAdmin] = useState<boolean | null>(null);
   const [searchTerm, setSearchTerm] = useState<string>('');
   const [filterStatus, setFilterStatus] = useState<'all' | 'active' | 'returned'>('all');
   const router = useRouter();
@@ -48,76 +49,79 @@ export default function AdminBorrowsPage() {
 
   // Kullanıcı token'ını al ve yetkisini kontrol et
   useEffect(() => {
-    const token = localStorage.getItem('token');
+    console.log("Admin kontrolü başlatılıyor...");
+    
+    // Token kontrolü
+    const token = localStorage.getItem('accessToken');
     setUserToken(token);
     
     if (!token) {
-      router.push('/');
+      console.log("Token bulunamadı, admin değil");
+      setIsAdmin(false);
       return;
     }
 
-    // Admin yetkisini kontrol et
-    const checkAdmin = async () => {
-      try {
-        const response = await fetch('/api/auth/check-admin', {
-          headers: {
-            'Authorization': `Bearer ${token}`
-          }
-        });
-        
-        if (!response.ok) {
-          router.push('/');
-        }
-      } catch (err) {
-        console.error('Yetki kontrolü hatası:', err);
-        router.push('/');
-      }
-    };
-    
-    checkAdmin();
-  }, [router]);
-
-  // Ödünç alma kayıtlarını getir
-  useEffect(() => {
-    const fetchBorrows = async () => {
-      if (!userToken) return;
-      
-      try {
-        setLoading(true);
-        const response = await fetch('/api/borrows', {
-          headers: {
-            'Authorization': `Bearer ${userToken}`
-          }
-        });
-        
-        if (response.ok) {
-          const data = await response.json();
-          if (data && Array.isArray(data) && data.length > 0) {
-            setBorrows(data);
-            setFilteredBorrows(data);
-            setError(null);
-          } else {
-            // Boş veri - gerçek veri kullan
-            setBorrows([]);
-            setFilteredBorrows([]);
-            setError("Henüz ödünç kayıtı bulunmuyor.");
-          }
-        } else {
-          const errorData = await response.json();
-          setError(errorData.error || 'Ödünç alma kayıtları getirilirken bir hata oluştu');
-        }
-      } catch (err) {
-        console.error('Ödünç alma kayıtları getirme hatası:', err);
-        setError('Ödünç alma kayıtları getirilirken bir hata oluştu');
-      } finally {
-        setLoading(false);
-      }
-    };
-    
-    if (userToken) {
-      fetchBorrows();
+    // Kullanıcı verilerini kontrol et
+    const userStr = localStorage.getItem('user');
+    if (!userStr) {
+      console.log("Kullanıcı verileri bulunamadı, admin değil");
+      setIsAdmin(false);
+      return;
     }
-  }, [userToken]);
+
+    try {
+      const userData = JSON.parse(userStr);
+      console.log("Kullanıcı rolü:", userData.role);
+      
+      // Kullanıcı admin mi?
+      if (userData.role.toLowerCase() === 'admin') {
+        console.log("Kullanıcı admin, sayfa yükleniyor");
+        setIsAdmin(true);
+        
+        // Ödünç alma kayıtlarını getir
+        const fetchBorrows = async () => {
+          try {
+            setLoading(true);
+            const response = await fetch('/api/borrows', {
+              headers: {
+                'Authorization': `Bearer ${token}`
+              }
+            });
+            
+            if (response.ok) {
+              const data = await response.json();
+              if (data && Array.isArray(data) && data.length > 0) {
+                setBorrows(data);
+                setFilteredBorrows(data);
+                setError(null);
+              } else {
+                // Boş veri - gerçek veri kullan
+                setBorrows([]);
+                setFilteredBorrows([]);
+                setError("Henüz ödünç kayıtı bulunmuyor.");
+              }
+            } else {
+              const errorData = await response.json();
+              setError(errorData.error || 'Ödünç alma kayıtları getirilirken bir hata oluştu');
+            }
+          } catch (err) {
+            console.error('Ödünç alma kayıtları getirme hatası:', err);
+            setError('Ödünç alma kayıtları getirilirken bir hata oluştu');
+          } finally {
+            setLoading(false);
+          }
+        };
+        
+        fetchBorrows();
+      } else {
+        console.log("Kullanıcı admin değil");
+        setIsAdmin(false);
+      }
+    } catch (e) {
+      console.error("Kullanıcı verilerini ayrıştırma hatası:", e);
+      setIsAdmin(false);
+    }
+  }, []);
 
   // Filter and search logic
   useEffect(() => {
@@ -200,6 +204,82 @@ export default function AdminBorrowsPage() {
     
     return borrows.filter(b => new Date(b.borrowDate) >= sevenDaysAgo).length;
   };
+
+  // Admin değilse erişim reddedildi mesajı göster
+  if (isAdmin === false) {
+    return (
+      <div className="min-h-screen bg-gray-900 text-white">
+        <div style={{ 
+          maxWidth: '600px', 
+          margin: '0 auto', 
+          padding: '2rem 1rem',
+          textAlign: 'center'
+        }}>
+          <h1 style={{ 
+            fontSize: '2rem', 
+            marginBottom: '1rem', 
+            color: '#ef4444'
+          }}>
+            Erişim Reddedildi
+          </h1>
+          <p style={{ 
+            fontSize: '1.125rem', 
+            marginBottom: '2rem',
+            color: 'rgba(255, 255, 255, 0.7)'
+          }}>
+            Bu sayfaya erişmek için admin yetkilerine sahip olmanız gerekmektedir.
+          </p>
+          <Link href="/" style={{
+            display: 'inline-block',
+            padding: '0.75rem 1.5rem',
+            backgroundColor: 'rgba(30, 41, 59, 0.7)',
+            color: '#ffffff',
+            borderRadius: '0.375rem',
+            fontWeight: 'bold',
+            cursor: 'pointer',
+            transition: 'background-color 0.15s ease-in-out',
+            fontSize: '0.875rem',
+            textDecoration: 'none',
+            marginBottom: '2rem',
+            border: '1px solid rgba(255, 255, 255, 0.1)'
+          }}>
+            Ana Sayfaya Dön
+          </Link>
+        </div>
+      </div>
+    );
+  }
+
+  // Hala kontrol ediliyorsa yükleniyor göster
+  if (isAdmin === null) {
+    return (
+      <div className="min-h-screen bg-gray-900 text-white">
+        <div style={{ 
+          maxWidth: '600px', 
+          margin: '0 auto', 
+          padding: '2rem 1rem',
+          textAlign: 'center'
+        }}>
+          <h1 style={{ 
+            fontSize: '2rem', 
+            marginBottom: '1rem'
+          }}>
+            Yetki Kontrol Ediliyor...
+          </h1>
+          <div style={{ 
+            display: 'inline-block',
+            width: '3rem',
+            height: '3rem',
+            borderRadius: '50%',
+            borderTop: '3px solid #3b82f6',
+            borderRight: '3px solid transparent',
+            animation: 'spin 1s linear infinite',
+            marginBottom: '1rem'
+          }}></div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="admin-container">

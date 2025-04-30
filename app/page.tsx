@@ -136,7 +136,14 @@ export default function Home() {
       />
       
       {/* Login ve Register Modalları */}
-      <LoginModal isOpen={showLoginModal} onClose={() => setShowLoginModal(false)} />
+      <LoginModal 
+        isOpen={showLoginModal} 
+        onClose={() => setShowLoginModal(false)} 
+        openRegisterModal={() => {
+          setShowLoginModal(false);
+          setShowRegisterModal(true);
+        }}
+      />
       <RegisterModal 
         isOpen={showRegisterModal} 
         onClose={() => setShowRegisterModal(false)}

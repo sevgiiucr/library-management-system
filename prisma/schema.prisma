@@ -30,6 +30,7 @@ model User {
   updatedAt       DateTime   @updatedAt
   password        String
   profileImageUrl String?    @db.Text
+  refreshToken    String?    @db.Text
   borrows         Borrow[]
   favorites       Favorite[]
 }

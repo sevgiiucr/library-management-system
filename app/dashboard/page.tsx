@@ -33,44 +33,96 @@ export default function Dashboard() {
   });
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
+  const [userToken, setUserToken] = useState<string | null>(null);
+  const [isClient, setIsClient] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const router = useRouter();
   const videoRef = useRef<HTMLVideoElement>(null);
   const [error, setError] = useState<string | null>(null);
 
+  // Client tarafında olup olmadığımızı kontrol et
   useEffect(() => {
-    // Kullanıcı bilgilerini localStorage'dan al
-    const userStr = localStorage.getItem('user');
-    const token = localStorage.getItem('token');
+    setIsClient(true);
+  }, []);
+
+  useEffect(() => {
+    const token = localStorage.getItem('accessToken');
     
-    if (!userStr || !token) {
+    if (!token) {
       router.push('/');
       return;
     }
+    
+    // Her zamanki veri yükleme işlemlerine devam et
+    setUserToken(token);
+    fetchUserProfile(token);
+    fetchBorrowedBooks(token);
+    fetchFavoriteBooks(token);
+    fetchCompletedBooks(token);
+  }, [isClient, router]);
 
+  // Token yenileme fonksiyonu - Axios interceptor veya bir middleware
+  // kullanarak daha genel bir çözüm oluşturulabilir
+  const refreshTokenIfNeeded = async () => {
     try {
-      const user = JSON.parse(userStr);
-      setUserInfo({
-        id: user.id || '',
-        name: user.name || 'Misafir Kullanıcı',
-        email: user.email || '',
-        profileImageUrl: user.profileImageUrl || user.profileImage,
-        createdAt: user.createdAt
+      const response = await fetch('/api/auth/refresh-token', {
+        method: 'POST',
+        credentials: 'include' // Cookie'leri dahil et
       });
 
-      // API'den kullanıcı bilgilerini (ve createdAt değerini) al
-      fetchUserProfile(token);
-      
-      // Ödünç alınan kitapları API'den al
-      fetchBorrowedBooks(token);
-      // Favori kitapları API'den al
-      fetchFavoriteBooks(token);
-      // Tamamlanmış ödünç almaları al
-      fetchCompletedBooks(token);
+      if (response.ok) {
+        const data = await response.json();
+        // Yeni access token'ı localStorage'da sakla
+        localStorage.setItem('accessToken', data.accessToken);
+        return data.accessToken;
+      } else {
+        // Token yenilenemezse, oturumu sonlandır
+        localStorage.removeItem('accessToken');
+        localStorage.removeItem('user');
+        router.push('/login');
+        return null;
+      }
     } catch (error) {
-      console.error('Kullanıcı bilgisi işlenirken hata:', error);
+      console.error('Token yenilenirken hata:', error);
+      localStorage.removeItem('accessToken');
+      localStorage.removeItem('user');
+      router.push('/login');
+      return null;
     }
-  }, [router]);
+  };
+
+  // API istekleri için yardımcı fonksiyon
+  const fetchWithTokenRefresh = async (url: string, options: RequestInit = {}) => {
+    let token = localStorage.getItem('accessToken');
+    
+    // İlk deneme
+    const response = await fetch(url, {
+      ...options,
+      headers: {
+        ...options.headers,
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      }
+    });
+
+    // 401 hatası alırsak (token geçersiz), token'ı yenile ve tekrar dene
+    if (response.status === 401) {
+      const newToken = await refreshTokenIfNeeded();
+      if (!newToken) return null;
+
+      // Yenilenen token ile tekrar dene
+      return fetch(url, {
+        ...options,
+        headers: {
+          ...options.headers,
+          'Authorization': `Bearer ${newToken}`,
+          'Content-Type': 'application/json'
+        }
+      });
+    }
+
+    return response;
+  };
 
   // Kullanıcı profilini API'den al
   const fetchUserProfile = async (token: string) => {
@@ -83,27 +135,15 @@ export default function Dashboard() {
       
       console.log("Kullanıcı profili API isteği yapılıyor...");
       
-      // Yeni oluşturduğumuz /api/auth/me endpoint'ini kullanıyoruz
-      const response = await fetch('/api/auth/me', {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Cache-Control': 'no-cache, no-store, must-revalidate'
-        }
-      });
+      const response = await fetchWithTokenRefresh('/api/auth/me');
+      
+      if (!response) {
+        return; // Token yenileme başarısız, zaten yönlendirme yapıldı
+      }
       
       console.log('Kullanıcı profili API yanıt durumu:', response.status);
 
       if (!response.ok) {
-        // 401 veya 403 hatası alındığında token geçersiz olabilir
-        if (response.status === 401 || response.status === 403) {
-          console.error('Token geçersiz, oturum yenileniyor');
-          // LocalStorage'dan token ve kullanıcı bilgilerini temizle
-          localStorage.removeItem('token');
-          localStorage.removeItem('user');
-          // Kullanıcıyı giriş sayfasına yönlendir
-          router.push('/');
-          return;
-        }
         console.error('Kullanıcı profili getirme hatası:', response.status);
         return;
       }
@@ -153,27 +193,23 @@ export default function Dashboard() {
       console.log("API isteği yapılıyor... Token:", token.substring(0, 15) + "...");
       
       // Önce aktif ödünç endpoint'ini dene
-      const response = await fetch('/api/borrows/active', {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Cache-Control': 'no-cache, no-store, must-revalidate'
-        }
-      });
+      const response = await fetchWithTokenRefresh('/api/borrows/active');
+      
+      if (!response) {
+        setLoading(false);
+        return; // Token yenileme başarısız, zaten yönlendirme yapıldı
+      }
       
       console.log('API yanıt durumu:', response.status, response.statusText);
 
       if (!response.ok) {
         console.log('API yanıtı başarısız, genel ödünç API endpoint\'ini deneniyor');
         // Aktif ödünç endpoint'i başarısız olursa, genel ödünç endpoint'ini dene
-        const allBorrowsResponse = await fetch('/api/borrows', {
-          headers: {
-            'Authorization': `Bearer ${token}`,
-            'Cache-Control': 'no-cache, no-store, must-revalidate'
-          }
-        });
+        const allBorrowsResponse = await fetchWithTokenRefresh('/api/borrows');
         
-        if (!allBorrowsResponse.ok) {
-          setError("Verileri yüklerken bir hata oluştu: " + response.status);
+        if (!allBorrowsResponse || !allBorrowsResponse.ok) {
+          setError("Verileri yüklerken bir hata oluştu");
+          setLoading(false);
           return;
         }
         
@@ -190,7 +226,7 @@ export default function Dashboard() {
             published: borrow.book.published || 2024,
             borrowDate: borrow.borrowDate,
             returnDate: borrow.returnDate,
-            bookId: borrow.bookId
+            bookId: borrow.book.id
           }));
         
         if (activeBorrows && activeBorrows.length > 0) {
@@ -200,19 +236,25 @@ export default function Dashboard() {
           setBorrowedBooks([]);
           setError("Henüz ödünç aldığınız kitap bulunmuyor.");
         }
+        setLoading(false);
         return;
       }
 
       const data = await response.json();
       console.log('API yanıt verisi:', data);
       
-      if (data && Array.isArray(data) && data.length > 0) {
-        setBorrowedBooks(data);
-        setError(null);
+      if (data && Array.isArray(data)) {
+        if (data.length > 0) {
+          setBorrowedBooks(data);
+          setError(null);
+        } else {
+          setBorrowedBooks([]);
+          setError("Henüz ödünç aldığınız kitap bulunmuyor.");
+        }
       } else {
-        // Boş ödünç listesi
+        console.error('API geçersiz veri döndü:', data);
         setBorrowedBooks([]);
-        setError("Henüz ödünç aldığınız kitap bulunmuyor.");
+        setError("API veri formatında hata: Dizi beklendi");
       }
     } catch (error) {
       console.error('API hatası:', error);
@@ -232,12 +274,11 @@ export default function Dashboard() {
       
       console.log("Favori kitaplar API isteği yapılıyor...");
       
-      const response = await fetch('/api/favorites', {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Cache-Control': 'no-cache, no-store, must-revalidate'
-        }
-      });
+      const response = await fetchWithTokenRefresh('/api/favorites');
+      
+      if (!response) {
+        return; // Token yenileme başarısız, zaten yönlendirme yapıldı
+      }
       
       console.log('Favoriler API yanıt durumu:', response.status);
 
@@ -271,12 +312,11 @@ export default function Dashboard() {
       console.log("Tamamlanmış ödünç alma isteği yapılıyor...");
       
       // Tüm ödünç almaları getir
-      const response = await fetch('/api/borrows', {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Cache-Control': 'no-cache, no-store, must-revalidate'
-        }
-      });
+      const response = await fetchWithTokenRefresh('/api/borrows');
+      
+      if (!response) {
+        return; // Token yenileme başarısız, zaten yönlendirme yapıldı
+      }
       
       if (!response.ok) {
         console.error('Ödünç almaları getirme hatası:', response.status);
@@ -385,14 +425,21 @@ export default function Dashboard() {
 
   // Yenileme işlevi
   const handleRefresh = () => {
-    const token = localStorage.getItem('token');
-    if (token) {
-      setLoading(true);
-      fetchUserProfile(token);
-      fetchBorrowedBooks(token);
-      fetchFavoriteBooks(token);
-      fetchCompletedBooks(token);
+    setLoading(true);
+    setError(null);
+    
+    const token = localStorage.getItem('accessToken');
+    if (!token) {
+      setLoading(false);
+      router.push('/');
+      return;
     }
+    
+    // Verileri yenile
+    fetchBorrowedBooks(token);
+    fetchFavoriteBooks(token);
+    fetchCompletedBooks(token);
+    fetchUserProfile(token);
   };
 
   return (

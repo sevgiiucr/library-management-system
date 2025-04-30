@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { prisma } from '@/app/lib/prisma';
+import prisma from '@/app/lib/prisma';
 
 // Geçici veritabanı referansı (app/api/books/route.ts'den gelecek)
 // Bu mock API'da aynı veri yapısını kullanabilmek için global değişkenleri referans olarak alıyoruz

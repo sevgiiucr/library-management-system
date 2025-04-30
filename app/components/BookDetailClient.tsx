@@ -50,7 +50,7 @@ export default function BookDetailClient({ book }: BookDetailClientProps) {
   // LocalStorage'dan kullanıcı bilgilerini al
   useEffect(() => {
     const userStr = localStorage.getItem('user');
-    const token = localStorage.getItem('token');
+    const token = localStorage.getItem('accessToken');
     
     if (userStr && token) {
       try {
@@ -73,7 +73,7 @@ export default function BookDetailClient({ book }: BookDetailClientProps) {
     try {
       if (!bookData || !bookData.available) return;
       
-      const token = localStorage.getItem('token');
+      const token = localStorage.getItem('accessToken');
       if (!token) {
         router.push('/login');
         return;
@@ -150,7 +150,7 @@ export default function BookDetailClient({ book }: BookDetailClientProps) {
     try {
       if (!bookData || bookData.available) return;
       
-      const token = localStorage.getItem('token');
+      const token = localStorage.getItem('accessToken');
       if (!token) {
         router.push('/login');
         return;
@@ -204,7 +204,7 @@ export default function BookDetailClient({ book }: BookDetailClientProps) {
       setTimeout(() => {
         console.log('Dashboard sayfasına yönlendiriliyor...');
         router.push('/dashboard');
-      }, 5000);
+      }, 3000);
       
     } catch (err: any) {
       console.error('Kitap iade hatası:', err);
@@ -223,19 +223,21 @@ export default function BookDetailClient({ book }: BookDetailClientProps) {
   // Container stili
   const containerStyle: CSSProperties = {
     minHeight: '100vh',
-    backgroundColor: 'black',
     color: 'white',
     position: 'relative',
   };
   
-  // Arkaplan gradient stili
+  // Arkaplan stili
   const backgroundStyle: CSSProperties = {
     position: 'fixed',
     top: 0,
     left: 0,
     width: '100%',
     height: '100%',
-    background: 'radial-gradient(circle at 30% 50%, rgba(30, 58, 138, 0.15) 0%, rgba(0, 0, 0, 0.95) 100%)',
+    backgroundImage: 'url("/library1.jpg")',
+    backgroundSize: 'cover',
+    backgroundPosition: 'center',
+    opacity: 0.15,
     zIndex: 1,
   };
   
@@ -370,21 +372,24 @@ export default function BookDetailClient({ book }: BookDetailClientProps) {
                 {/* Kitap kapak resmi bölümü */}
                 {bookData.imageUrl && (
                   <div style={{ 
-                    width: '250px',
-                    maxWidth: '100%',
+                    width: '36%',
+                    height: '430px',
                     borderRadius: '8px',
                     overflow: 'hidden',
                     boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.3), 0 4px 6px -4px rgba(0, 0, 0, 0.2)',
                     border: '1px solid rgba(255, 255, 255, 0.1)',
                     backgroundColor: 'rgba(30, 41, 59, 0.5)',
+                    position: 'relative'
                   }}>
                     <img 
                       src={bookData.imageUrl} 
                       alt={bookData.title}
                       style={{ 
-                        width: '100%', 
-                        height: '350px', 
-                        objectFit: 'cover' 
+                        position: 'absolute',
+                        width: '100%',
+                        height: '100%',
+                        objectFit: 'cover',
+                        objectPosition: 'center'
                       }} 
                     />
                   </div>

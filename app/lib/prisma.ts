@@ -1,12 +1,16 @@
 import { PrismaClient } from '@prisma/client';
 
-// Global olarak Prisma Client'ı tanımla
-const globalForPrisma = global as unknown as { prisma: PrismaClient };
+// PrismaClient singleton örneği
+let prisma: PrismaClient;
 
-// Geliştirme ortamında birden fazla Prisma Client örneği oluşturmayı önle
-export const prisma =
-  globalForPrisma.prisma ||
-  new PrismaClient();
+if (process.env.NODE_ENV === 'production') {
+  prisma = new PrismaClient();
+} else {
+  // Geliştirme ortamında her sıcak yeniden yüklemede yeni bağlantı oluşmasını önle
+  if (!(global as any).prisma) {
+    (global as any).prisma = new PrismaClient();
+  }
+  prisma = (global as any).prisma;
+}
 
-// Production ortamında olmadığında global nesneye cache'le
-if (process.env.NODE_ENV !== 'production') globalForPrisma.prisma = prisma; 
+export default prisma; 

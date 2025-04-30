@@ -2,7 +2,7 @@
 import Image from 'next/image';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
-import { prisma } from '@/app/lib/prisma';
+import prisma from '@/app/lib/prisma';
 import BookDetailClient from '@/app/components/BookDetailClient';
 
 /**
@@ -69,8 +69,6 @@ async function getBook(id: string) {
 export default async function BookDetailPage({ params }: { params: { id: string } }) {
   // params'ı direkt kullan, async fonksiyon olduğu için sorun olmaz
   const book = await getBook(params.id);
-  // ...devamı aynı
-
   
   // Kitap bulunamazsa 404 sayfasına yönlendir
   if (!book) {
@@ -78,6 +76,20 @@ export default async function BookDetailPage({ params }: { params: { id: string 
   }
   
   return (
-    <BookDetailClient book={book} />
+    <div className="book-detail-container" style={{ position: 'relative', minHeight: '100vh' }}>
+      {/* Arka Plan Görseli */}
+      <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, zIndex: -1 }}>
+        <Image
+          src="/library1.jpg"
+          alt="Kütüphane Görünümü"
+          fill
+          style={{ objectFit: 'cover', opacity: 0.15 }}
+          priority
+          quality={90}
+        />
+      </div>
+      
+      <BookDetailClient book={book} />
+    </div>
   );
 } 

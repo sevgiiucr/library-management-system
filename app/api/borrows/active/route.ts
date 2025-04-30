@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
-import { prisma } from '@/app/lib/prisma';
+import prisma from '@/app/lib/prisma';
 import { verifyToken } from '@/lib/auth';
+import { Borrow, Book } from '@prisma/client';
 
 export async function GET(request: Request) {
   try {
@@ -42,12 +43,12 @@ export async function GET(request: Request) {
 
     console.log(`Kullanıcı ${decoded.userId} için ${borrows.length} aktif ödünç bulundu`);
 
-    // Yanıt formatını düzenle
-    const formattedBorrows = borrows.map(borrow => ({
+    // Yanıt formatını düzenle - Frontend'in beklediği yapıya uygun olmalı
+    const formattedBorrows = borrows.map((borrow: Borrow & { book: Book }) => ({
       id: borrow.id,
       title: borrow.book.title,
       author: borrow.book.author,
-      published: borrow.book.published,
+      published: borrow.book.published || 2024,
       borrowDate: borrow.borrowDate.toISOString(),
       returnDate: borrow.returnDate ? borrow.returnDate.toISOString() : null,
       bookId: borrow.book.id

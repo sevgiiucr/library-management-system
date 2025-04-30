@@ -2,7 +2,7 @@
 // Kullanıcı listesi ve yeni kullanıcı oluşturma işlemleri
 
 import { NextResponse } from 'next/server';
-import { prisma } from '@/app/lib/prisma';
+import prisma from '@/app/lib/prisma';
 import { verifyToken } from '@/lib/auth';
 import bcrypt from 'bcrypt';
 
@@ -29,59 +29,82 @@ import bcrypt from 'bcrypt';
  */
 export async function GET(request: Request) {
   try {
+    console.log('GET /api/users isteği alındı');
+    
     // Token kontrolü
     const token = request.headers.get('authorization')?.split(' ')[1];
     if (!token) {
+      console.log('Token bulunamadı');
       return NextResponse.json(
         { error: 'Yetkilendirme token\'ı gerekli' },
         { status: 401 }
       );
     }
+    
+    console.log('Token alındı, doğrulanıyor...');
+    
+    try {
+      const decoded = verifyToken(token);
+      if (!decoded || !decoded.userId) {
+        console.log('Token geçersiz veya süresi dolmuş');
+        return NextResponse.json(
+          { error: 'Geçersiz veya süresi dolmuş token' },
+          { status: 401 }
+        );
+      }
+      
+      console.log('Token doğrulandı, kullanıcı ID:', decoded.userId);
 
-    const decoded = verifyToken(token);
-    if (!decoded || !decoded.userId) {
+      // Admin yetkisini kontrol et
+      const admin = await prisma.user.findUnique({
+        where: { id: decoded.userId },
+        select: { role: true }
+      });
+
+      console.log('Kullanıcı rolü:', admin?.role);
+
+      if (!admin || admin.role.toLowerCase() !== 'admin') {
+        console.log('Kullanıcı admin yetkisine sahip değil');
+        return NextResponse.json(
+          { error: 'Bu işlem için admin yetkisi gerekli' },
+          { status: 403 }
+        );
+      }
+
+      console.log('Admin yetkisi doğrulandı, kullanıcılar getiriliyor...');
+
+      // Tüm kullanıcıları getir (şifre hariç)
+      const users = await prisma.user.findMany({
+        select: {
+          id: true,
+          name: true,
+          email: true,
+          role: true,
+          profileImageUrl: true,
+          createdAt: true,
+          updatedAt: true,
+          _count: {
+            select: {
+              borrows: true,
+              favorites: true
+            }
+          }
+        },
+        orderBy: {
+          createdAt: 'desc'
+        }
+      });
+
+      console.log(`${users.length} kullanıcı başarıyla getirildi`);
+      
+      return NextResponse.json(users);
+    } catch (tokenError) {
+      console.error('Token doğrulama hatası:', tokenError);
       return NextResponse.json(
-        { error: 'Geçersiz veya süresi dolmuş token' },
+        { error: 'Token doğrulama hatası' },
         { status: 401 }
       );
     }
-
-    // Admin yetkisini kontrol et
-    const admin = await prisma.user.findUnique({
-      where: { id: decoded.userId },
-      select: { role: true }
-    });
-
-    if (!admin || admin.role !== 'admin') {
-      return NextResponse.json(
-        { error: 'Bu işlem için admin yetkisi gerekli' },
-        { status: 403 }
-      );
-    }
-
-    // Tüm kullanıcıları getir (şifre hariç)
-    const users = await prisma.user.findMany({
-      select: {
-        id: true,
-        name: true,
-        email: true,
-        role: true,
-        profileImageUrl: true,
-        createdAt: true,
-        updatedAt: true,
-        _count: {
-          select: {
-            borrows: true,
-            favorites: true
-          }
-        }
-      },
-      orderBy: {
-        createdAt: 'desc'
-      }
-    });
-
-    return NextResponse.json(users);
   } catch (error) {
     console.error('Kullanıcıları getirme hatası:', error);
     return NextResponse.json(

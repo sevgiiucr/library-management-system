@@ -134,7 +134,7 @@ function BooksContent() {
 
   // Kullanıcının token'ını localStorage'dan al
   useEffect(() => {
-    const token = localStorage.getItem('token');
+    const token = localStorage.getItem('accessToken');
     setUserToken(token);
     
     // Sayfa yüklendiğinde localStorage'dan geçici favorileri yükle
@@ -156,6 +156,69 @@ function BooksContent() {
     setSelectedCategory(urlCategory);
   }, [urlSearchTerm, urlCategory]);
 
+  // Token yenileme fonksiyonu
+  const refreshTokenIfNeeded = async () => {
+    try {
+      const response = await fetch('/api/auth/refresh-token', {
+        method: 'POST',
+        credentials: 'include' // Cookie'leri dahil et
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        // Yeni access token'ı localStorage'da sakla
+        localStorage.setItem('accessToken', data.accessToken);
+        setUserToken(data.accessToken);
+        return data.accessToken;
+      } else {
+        // Token yenilenemezse, oturumu sonlandır
+        localStorage.removeItem('accessToken');
+        localStorage.removeItem('user');
+        router.push('/login');
+        return null;
+      }
+    } catch (error) {
+      console.error('Token yenilenirken hata:', error);
+      localStorage.removeItem('accessToken');
+      localStorage.removeItem('user');
+      router.push('/login');
+      return null;
+    }
+  };
+
+  // API istekleri için yardımcı fonksiyon
+  const fetchWithTokenRefresh = async (url: string, options: RequestInit = {}) => {
+    let token = userToken;
+    
+    // İlk deneme
+    const response = await fetch(url, {
+      ...options,
+      headers: {
+        ...options.headers,
+        'Authorization': token ? `Bearer ${token}` : '',
+        'Content-Type': 'application/json'
+      }
+    });
+
+    // 401 hatası alırsak (token geçersiz), token'ı yenile ve tekrar dene
+    if (response.status === 401 && token) {
+      const newToken = await refreshTokenIfNeeded();
+      if (!newToken) return null;
+
+      // Yenilenen token ile tekrar dene
+      return fetch(url, {
+        ...options,
+        headers: {
+          ...options.headers,
+          'Authorization': `Bearer ${newToken}`,
+          'Content-Type': 'application/json'
+        }
+      });
+    }
+
+    return response;
+  };
+
   // Favori kitapları getir
   useEffect(() => {
     const fetchFavorites = async () => {
@@ -167,11 +230,12 @@ function BooksContent() {
       console.log("Favori kitapları getirme işlemi başlatılıyor");
       
       try {
-        const response = await fetch('/api/favorites', {
-          headers: {
-            'Authorization': `Bearer ${userToken}`
-          }
-        });
+        const response = await fetchWithTokenRefresh('/api/favorites');
+        
+        if (!response) {
+          fetchBooks([]); // Token yenileme başarısız, kitapları favorsiz yükle
+          return;
+        }
         
         console.log("Favori getirme yanıtı:", response.status);
         
@@ -468,7 +532,7 @@ function BooksContent() {
     }
   };
 
-  // Ödünç alınmış kitapları doğrudan iade edebilmek ve kitap durumunu güncellemek için işlev
+  // İade veya ödünç alma işlemi
   const handleReturnBook = async (event: React.MouseEvent, bookId: string) => {
     event.stopPropagation(); // Kitap kartına tıklamayı engelle
     event.preventDefault(); // Sayfa yönlendirmesini engelle
@@ -502,17 +566,18 @@ function BooksContent() {
       const action = book.available ? 'borrow' : 'return';
       
       // İade veya ödünç alma işlemi için API çağrısı
-      const response = await fetch(`/api/books/${bookId}`, {
+      const response = await fetchWithTokenRefresh(`/api/books/${bookId}`, {
         method: 'PATCH',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${userToken}`
-        },
         body: JSON.stringify({
           action: action,
           userId: userId  // Kullanıcı ID'sini gönder
         }),
       });
+      
+      if (!response) {
+        showNotification('İşlem sırasında kimlik doğrulama hatası oluştu', 'error');
+        return;
+      }
       
       if (response.ok) {
         // Kitap durumunu güncelle

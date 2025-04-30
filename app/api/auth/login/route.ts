@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { PrismaClient } from '@prisma/client';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
+import { generateAccessToken, generateRefreshToken, saveRefreshToken } from '@/lib/auth';
 
 const prisma = new PrismaClient();
 const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key';
@@ -48,22 +49,40 @@ export async function POST(request: Request) {
       );
     }
 
-    // JWT token oluştur
-    const token = jwt.sign(
-      { userId: user.id, email: user.email },
-      JWT_SECRET,
-      { expiresIn: '24h' }
-    );
+    // Access token oluştur (kısa süreli)
+    const accessToken = generateAccessToken(user.id, user.email, user.role);
+    
+    // Refresh token oluştur (uzun süreli)
+    const refreshToken = generateRefreshToken(user.id);
+    
+    // Refresh token'ı veritabanına kaydet
+    await saveRefreshToken(user.id, refreshToken);
 
-    return NextResponse.json({
+    // Http-only cookie olarak refresh token'ı ayarla
+    const response = NextResponse.json({
       message: 'Giriş başarılı',
       user: {
         id: user.id,
         name: user.name,
-        email: user.email
+        email: user.email,
+        role: user.role
       },
-      token
+      accessToken // Artık token yerine accessToken kullanıyoruz
     });
+
+    // Refresh token'ı güvenli bir şekilde http-only cookie olarak ayarla
+    // Http-only cookie tarayıcıdan JavaScript ile erişilemez
+    response.cookies.set({
+      name: 'refreshToken',
+      value: refreshToken,
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'strict',
+      maxAge: 60 * 60 * 24 * 30, // 30 gün
+      path: '/'
+    });
+
+    return response;
   } catch (error) {
     console.error('Giriş yapılırken hata:', error);
     return NextResponse.json(

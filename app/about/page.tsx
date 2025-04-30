@@ -117,17 +117,7 @@ export default function About() {
               </div>
             </div>
           </div>
-        </section>
-        
-        {/* ANA SAYFAYA GERİ DÖN */}
-        <div style={{textAlign: 'center'}}>
-          <Link 
-            href="/" 
-            className="about-button"
-          >
-            Ana Sayfaya Dön
-          </Link>
-        </div>
+        </section>     
       </div>
     </div>
   );

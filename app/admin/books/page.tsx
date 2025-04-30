@@ -822,21 +822,25 @@ export default function AdminBooksPage() {
                       {isDropdownOpen && (
                         <div className="absolute z-10 mt-1 w-full bg-gray-800 border border-gray-700 rounded-md shadow-lg max-h-56 overflow-y-auto">
                           <div className="p-2">
-                            {categories.map((category) => (
-                              <div
-                                key={category.id}
-                                onClick={() => toggleCategory(category)}
-                                className="flex items-center px-2 py-1.5 rounded-md cursor-pointer hover:bg-gray-700"
-                              >
-                                <input
-                                  type="checkbox"
-                                  checked={selectedCategories.some(id => id === category.id)}
-                                  onChange={() => {}}
-                                  className="h-4 w-4 text-blue-500 bg-gray-700 border-gray-600 rounded focus:ring-blue-600"
-                                />
-                                <span className="ml-2 text-sm">{category.name}</span>
-                              </div>
-                            ))}
+                            {categories && categories.length > 0 ? (
+                              categories.map((category) => (
+                                <div
+                                  key={category.id}
+                                  onClick={() => toggleCategory(category)}
+                                  className="flex items-center px-2 py-1.5 rounded-md cursor-pointer hover:bg-gray-700"
+                                >
+                                  <input
+                                    type="checkbox"
+                                    checked={selectedCategories.some(id => id === category.id)}
+                                    onChange={() => {}}
+                                    className="h-4 w-4 text-blue-500 bg-gray-700 border-gray-600 rounded focus:ring-blue-600"
+                                  />
+                                  <span className="ml-2 text-sm">{category.name}</span>
+                                </div>
+                              ))
+                            ) : (
+                              <div className="text-sm text-gray-400 p-2">Kategori yükleniyor...</div>
+                            )}
                           </div>
                         </div>
                       )}
@@ -1011,7 +1015,11 @@ export default function AdminBooksPage() {
                           <div className="text-sm text-white">{book.published}</div>
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap">
-                          <div className="text-sm text-gray-400">{book.categories.map((cat: any) => cat.categoryId).join(', ')}</div>
+                          <div className="text-sm text-gray-400">
+                            {book.categories && book.categories.length > 0 
+                              ? book.categories.map((cat: any) => cat.categoryId).join(', ') 
+                              : '-'}
+                          </div>
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap">
                           <span className="px-2 py-1 text-sm font-medium text-white rounded-full">

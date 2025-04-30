@@ -75,8 +75,27 @@ export default function Navbar() {
   };
 
   // Çıkış yapma işlemi
-  const handleLogout = () => {
-    localStorage.removeItem('token');
+  const handleLogout = async () => {
+    try {
+      const userStr = localStorage.getItem('user');
+      if (userStr) {
+        const user = JSON.parse(userStr);
+        
+        // Sunucuda logout işlemi yap
+        await fetch('/api/auth/logout', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ userId: user.id }),
+        });
+      }
+    } catch (error) {
+      console.error('Çıkış yapılırken hata:', error);
+    }
+    
+    // Yerel depolamadaki bilgileri temizle
+    localStorage.removeItem('accessToken');
     localStorage.removeItem('user');
     setIsLoggedIn(false);
     setUser(null);
@@ -325,7 +344,11 @@ export default function Navbar() {
       </div>
 
       {/* Login ve Register Modalları */}
-      <LoginModal isOpen={showLoginModal} onClose={() => setShowLoginModal(false)} />
+      <LoginModal 
+        isOpen={showLoginModal} 
+        onClose={() => setShowLoginModal(false)} 
+        openRegisterModal={handleOpenRegisterModal}
+      />
       <RegisterModal 
         isOpen={showRegisterModal} 
         onClose={() => setShowRegisterModal(false)}

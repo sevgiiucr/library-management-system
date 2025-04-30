@@ -3,10 +3,7 @@
 // ===================================
 
 import { NextResponse } from 'next/server';  // HTTP yanıtları için Next.js kütüphanesi
-import { PrismaClient } from '@prisma/client';  // Veritabanı işlemleri için Prisma ORM
-
-// Prisma veritabanı bağlantısı oluştur
-const prisma = new PrismaClient();
+import prisma from '@/app/lib/prisma';  // Veritabanı işlemleri için Prisma ORM
 
 // ===================================
 // GET - Tekil Ödünç Kaydı Getirme

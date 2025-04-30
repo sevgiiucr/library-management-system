@@ -165,6 +165,13 @@ module.exports = {
       // Özel renkleri tanımlar
       colors: {
         gold: '#d97706', // Amber-600 tonu (altın rengi)
+        primary: {
+          400: '#818cf8',  // indigo-400
+          500: '#6366f1',  // indigo-500
+          600: '#4f46e5',  // indigo-600
+          700: '#4338ca',  // indigo-700
+          800: '#3730a3',  // indigo-800
+        }
       },
       
       // Arka plan görüntülerini tanımlar
@@ -176,6 +183,7 @@ module.exports = {
       // Özel animasyonları tanımlar
       animation: {
         fadeIn: 'fadeIn 0.5s ease-in-out', // Fade-in animasyonu
+        modalOpen: 'modalOpen 0.3s ease-out forwards', // Modal açılış animasyonu
       },
       
       // Özel keyframe'leri tanımlar
@@ -183,6 +191,16 @@ module.exports = {
         fadeIn: {
           '0%': { opacity: '0' },    // Başlangıç durumu (görünmez)
           '100%': { opacity: '1' },  // Son durum (tamamen görünür)
+        },
+        modalOpen: {
+          '0%': { 
+            opacity: '0',
+            transform: 'scale(0.95) translateY(10px)'
+          },
+          '100%': { 
+            opacity: '1',
+            transform: 'scale(1) translateY(0)'
+          },
         },
       },
     },
