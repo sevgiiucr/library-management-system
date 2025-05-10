@@ -1,7 +1,15 @@
 import { NextResponse } from 'next/server';
+<<<<<<< HEAD
 import prisma from '../../../lib/prisma';
 import bcrypt from 'bcryptjs';
 
+=======
+import { PrismaClient } from '@prisma/client';
+import bcrypt from 'bcrypt';
+
+const prisma = new PrismaClient();
+
+>>>>>>> 7c5837e63bb275c41b3ad26848ac85d97a35a782
 export async function POST(request: Request) {
   try {
     const { name, email, password } = await request.json();
@@ -70,4 +78,4 @@ export async function POST(request: Request) {
   } finally {
     await prisma.$disconnect();
   }
-} 
+}

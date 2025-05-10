@@ -1,8 +1,13 @@
+<<<<<<< HEAD
 import { NextRequest, NextResponse } from "next/server";
 import prisma from "@/app/lib/prisma";
+=======
+import { NextResponse } from "next/server";
+import { prisma } from "@/app/lib/prisma";
+>>>>>>> 7c5837e63bb275c41b3ad26848ac85d97a35a782
 
 // GET /api/categories
-export async function GET(request: NextRequest) {
+export async function GET() {
   try {
     // Tüm kategorileri getir
     const categories = await prisma.$queryRaw`

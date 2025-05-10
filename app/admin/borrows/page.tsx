@@ -4,7 +4,7 @@ import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import '@/app/globals.css';
-import { ClipboardIcon, BookOpenIcon, ChartBarIcon, ClockIcon, MagnifyingGlassIcon } from '@heroicons/react/24/outline';
+import { ClipboardIcon, BookOpenIcon, ChartBarIcon, ClockIcon } from '@heroicons/react/24/outline';
 
 interface Borrow {
   id: string;
@@ -32,20 +32,6 @@ export default function AdminBorrowsPage() {
   const [searchTerm, setSearchTerm] = useState<string>('');
   const [filterStatus, setFilterStatus] = useState<'all' | 'active' | 'returned'>('all');
   const router = useRouter();
-
-  // Table styles
-  const tableContainerStyle: React.CSSProperties = {
-    backgroundColor: '#1f2937',
-    borderRadius: '0.25rem',
-    width: '100%',
-    overflow: 'auto'
-  };
-  
-  const tableStyle: React.CSSProperties = {
-    width: '100%',
-    borderCollapse: 'collapse',
-    minWidth: '800px'
-  };
 
   // Kullanıcı token'ını al ve yetkisini kontrol et
   useEffect(() => {
@@ -197,12 +183,71 @@ export default function AdminBorrowsPage() {
     return Math.round(totalDays / returnedBorrows.length);
   };
 
-  // Son 7 gündeki ödünç alma sayısını hesapla
-  const getRecentBorrows = () => {
-    const sevenDaysAgo = new Date();
-    sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
-    
-    return borrows.filter(b => new Date(b.borrowDate) >= sevenDaysAgo).length;
+  // JSX renders the borrow data table rows
+  const renderBorrowRows = () => {
+    return filteredBorrows.map((borrow) => {
+      const isOverdue = !borrow.returnDate && new Date(borrow.borrowDate) < new Date(Date.now() - 14 * 24 * 60 * 60 * 1000);
+      const isReturned = !!borrow.returnDate;
+      
+      return (
+        <tr key={borrow.id} className="admin-table-tr bg-gray-800/60">
+          <td className="admin-table-td">
+            <div className="flex items-center">
+              <div className="h-10 w-10 flex-shrink-0 rounded-full bg-gradient-to-br from-blue-600 to-blue-800 flex items-center justify-center text-white mr-4 text-lg font-bold shadow-lg shadow-blue-900/20">
+                {borrow.user.name.substring(0, 1).toUpperCase()}
+              </div>
+              <div>
+                <div className="font-medium text-white text-base">{borrow.user.name}</div>
+                <div className="text-sm text-gray-300">{borrow.user.email}</div>
+              </div>
+            </div>
+          </td>
+          <td className="admin-table-td">
+            <div>
+              <div className="font-medium text-white text-base">{borrow.book.title}</div>
+              <div className="text-sm text-gray-300">{borrow.book.author}</div>
+            </div>
+          </td>
+          <td className="admin-table-td">
+            <div className="text-sm text-white">
+              {new Date(borrow.borrowDate).toLocaleDateString('tr-TR')}
+            </div>
+          </td>
+          <td className="admin-table-td">
+            {isReturned ? (
+              <div className="text-sm text-white">
+                {new Date(borrow.returnDate as string).toLocaleDateString('tr-TR')}
+              </div>
+            ) : (
+              <div className={`inline-flex items-center rounded-full px-3 py-1.5 text-xs font-medium ${
+                isOverdue ? 'bg-red-600/30 text-red-300 border border-red-700/30' : 'bg-amber-600/30 text-amber-300 border border-amber-700/30'
+              }`}>
+                {isOverdue ? 'Gecikmiş' : 'İade Edilmedi'}
+              </div>
+            )}
+          </td>
+          <td className="admin-table-td text-right">
+            {!isReturned && (
+              <button
+                onClick={() => handleReturnBook(borrow.id)}
+                className="admin-button admin-button-green text-xs px-3.5 py-2"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                </svg>
+                İade Et
+              </button>
+            )}
+            <button className="ml-3 admin-button admin-button-gray text-xs px-3.5 py-2">
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              Detaylar
+            </button>
+          </td>
+        </tr>
+      );
+    });
   };
 
   // Admin değilse erişim reddedildi mesajı göster
@@ -453,69 +498,7 @@ export default function AdminBorrowsPage() {
                           </tr>
                         </thead>
                         <tbody className="admin-table-tbody">
-                          {filteredBorrows.map((borrow, index) => {
-                            const isOverdue = !borrow.returnDate && new Date(borrow.borrowDate) < new Date(Date.now() - 14 * 24 * 60 * 60 * 1000);
-                            const isReturned = !!borrow.returnDate;
-                            
-                            return (
-                              <tr key={borrow.id} className="admin-table-tr bg-gray-800/60">
-                                <td className="admin-table-td">
-                                  <div className="flex items-center">
-                                    <div className="h-10 w-10 flex-shrink-0 rounded-full bg-gradient-to-br from-blue-600 to-blue-800 flex items-center justify-center text-white mr-4 text-lg font-bold shadow-lg shadow-blue-900/20">
-                                      {borrow.user.name.substring(0, 1).toUpperCase()}
-                                    </div>
-                                    <div>
-                                      <div className="font-medium text-white text-base">{borrow.user.name}</div>
-                                      <div className="text-sm text-gray-300">{borrow.user.email}</div>
-                                    </div>
-                                  </div>
-                                </td>
-                                <td className="admin-table-td">
-                                  <div>
-                                    <div className="font-medium text-white text-base">{borrow.book.title}</div>
-                                    <div className="text-sm text-gray-300">{borrow.book.author}</div>
-                                  </div>
-                                </td>
-                                <td className="admin-table-td">
-                                  <div className="text-sm text-white">
-                                    {new Date(borrow.borrowDate).toLocaleDateString('tr-TR')}
-                                  </div>
-                                </td>
-                                <td className="admin-table-td">
-                                  {isReturned ? (
-                                    <div className="text-sm text-white">
-                                      {new Date(borrow.returnDate as string).toLocaleDateString('tr-TR')}
-                                    </div>
-                                  ) : (
-                                    <div className={`inline-flex items-center rounded-full px-3 py-1.5 text-xs font-medium ${
-                                      isOverdue ? 'bg-red-600/30 text-red-300 border border-red-700/30' : 'bg-amber-600/30 text-amber-300 border border-amber-700/30'
-                                    }`}>
-                                      {isOverdue ? 'Gecikmiş' : 'İade Edilmedi'}
-                                    </div>
-                                  )}
-                                </td>
-                                <td className="admin-table-td text-right">
-                                  {!isReturned && (
-                                    <button
-                                      onClick={() => handleReturnBook(borrow.id)}
-                                      className="admin-button admin-button-green text-xs px-3.5 py-2"
-                                    >
-                                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                                      </svg>
-                                      İade Et
-                                    </button>
-                                  )}
-                                  <button className="ml-3 admin-button admin-button-gray text-xs px-3.5 py-2">
-                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                                    </svg>
-                                    Detaylar
-                                  </button>
-                                </td>
-                              </tr>
-                            );
-                          })}
+                          {renderBorrowRows()}
                         </tbody>
                       </table>
                     </div>

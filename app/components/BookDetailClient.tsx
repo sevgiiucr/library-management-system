@@ -2,10 +2,45 @@
 
 import React, { useState, CSSProperties, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
+<<<<<<< HEAD
 import { BookDetailClientProps, FavoriteStatus, Book, OpenLibraryBook } from "../interfaces/book";
 import AddToFavorite from "./AddToFavorite";
 import BorrowBook from "./BorrowBook";
 import toast from "react-hot-toast";
+=======
+
+// Kitap tipi
+interface Book {
+  id: string;
+  title: string;
+  author: string;
+  published: number;
+  available: boolean;
+  imageUrl?: string;
+  currentBorrow?: {
+    id: string;
+    userId: string;
+    borrowDate: string;
+    user: {
+      id: string;
+      name: string;
+      email: string;
+    }
+  } | null;
+}
+
+// User tipi
+interface User {
+  id: string;
+  name: string;
+  email: string;
+}
+
+// Props tipi
+interface BookDetailClientProps {
+  book: Book;
+}
+>>>>>>> 7c5837e63bb275c41b3ad26848ac85d97a35a782
 
 /**
  * Kitap Detay Client Bileşeni
@@ -35,7 +70,7 @@ export default function BookDetailClient({
   const [isBorrowing, setIsBorrowing] = useState<boolean>(false);
   const [actionMessage, setActionMessage] = useState<string | null>(null);
   const [messageType, setMessageType] = useState<'success' | 'error' | null>(null);
-  const [currentUser, setCurrentUser] = useState<any>({
+  const [currentUser, setCurrentUser] = useState<User>({
     id: '',
     name: '',
     email: ''
@@ -210,6 +245,7 @@ export default function BookDetailClient({
 
   // Kitabı ödünç alma işlemi
   const handleBorrowBook = async () => {
+<<<<<<< HEAD
     if (!userToken) {
       setActionMessage('Kitap ödünç almak için giriş yapmalısınız');
       setMessageType('error');
@@ -241,11 +277,27 @@ export default function BookDetailClient({
       });
 
       const responseData = await response.json();
+=======
+    setIsBorrowing(true);
+    setActionMessage(null);
+
+    try {
+      const response = await fetch(`/api/books/${bookData.id}/borrow`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ userId: currentUser.id }),
+      });
+
+      const data = await response.json();
+>>>>>>> 7c5837e63bb275c41b3ad26848ac85d97a35a782
 
       if (!response.ok) {
-        throw new Error(responseData.error || 'Kitap ödünç alınırken bir hata oluştu');
+        throw new Error(data.error || 'Kitap ödünç alınamadı');
       }
 
+<<<<<<< HEAD
       // Update local state (güvenli id alma)
       const borrowId = responseData.borrow?.id || responseData.id || '';
       setBookData({
@@ -272,8 +324,15 @@ export default function BookDetailClient({
       }, 2000);
 
     } catch (err: any) {
+=======
+      setBookData(data.book);
+      setActionMessage('Kitap başarıyla ödünç alındı.');
+      setMessageType('success');
+    } catch (err: unknown) {
+>>>>>>> 7c5837e63bb275c41b3ad26848ac85d97a35a782
       console.error('Kitap ödünç alma hatası:', err);
-      setActionMessage(err.message || 'Kitap ödünç alınırken bir hata oluştu');
+      const errorMessage = err instanceof Error ? err.message : 'Kitap ödünç alınırken bir hata oluştu';
+      setActionMessage(errorMessage);
       setMessageType('error');
     } finally {
       setIsBorrowing(false);
@@ -282,6 +341,7 @@ export default function BookDetailClient({
   
   // Kitabı iade etme işlemi
   const handleReturnBook = async () => {
+<<<<<<< HEAD
     if (!userToken) {
       setActionMessage('Kitap iade etmek için giriş yapmalısınız');
       setMessageType('error');
@@ -313,11 +373,27 @@ export default function BookDetailClient({
       });
 
       const responseData = await response.json();
+=======
+    setIsBorrowing(true);
+    setActionMessage(null);
+
+    try {
+      const response = await fetch(`/api/books/${bookData.id}/return`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ userId: currentUser.id }),
+      });
+
+      const data = await response.json();
+>>>>>>> 7c5837e63bb275c41b3ad26848ac85d97a35a782
 
       if (!response.ok) {
-        throw new Error(responseData.error || 'Kitap iade edilirken bir hata oluştu');
+        throw new Error(data.error || 'Kitap iade edilemedi');
       }
 
+<<<<<<< HEAD
       // Update local state
       setBookData({
         ...bookData,
@@ -334,8 +410,15 @@ export default function BookDetailClient({
       }, 2000);
 
     } catch (err: any) {
+=======
+      setBookData(data.book);
+      setActionMessage('Kitap başarıyla iade edildi.');
+      setMessageType('success');
+    } catch (err: unknown) {
+>>>>>>> 7c5837e63bb275c41b3ad26848ac85d97a35a782
       console.error('Kitap iade hatası:', err);
-      setActionMessage(err.message || 'Kitap iade edilirken bir hata oluştu');
+      const errorMessage = err instanceof Error ? err.message : 'Kitap iade edilirken bir hata oluştu';
+      setActionMessage(errorMessage);
       setMessageType('error');
     } finally {
       setIsBorrowing(false);

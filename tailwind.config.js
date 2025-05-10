@@ -211,5 +211,19 @@ module.exports = {
   },
   
   // Tailwind CSS eklentileri
-  plugins: [require('@tailwindcss/forms')],
+  plugins: [
+    // Form elemanları için eklenti
+    import('@tailwindcss/forms'),
+    
+    // Özel kullanıcı tanımlı yardımcı sınıflar
+    function({ addUtilities }) {
+      addUtilities({
+        // Dancing Script fontu için özel yardımcı sınıf
+        '.dancing-script': {
+          fontFamily: '"Dancing Script", cursive',
+        },
+      })
+    },
+  ],
+
 } 

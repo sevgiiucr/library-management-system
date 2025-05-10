@@ -1,11 +1,19 @@
 'use client';
 
+<<<<<<< HEAD
 import React, { useState, useEffect } from 'react';
+=======
+import React, { useState, useEffect, Suspense, useCallback } from 'react';
+>>>>>>> 7c5837e63bb275c41b3ad26848ac85d97a35a782
 import { useRouter, usePathname, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import Navbar from '../components/Navbar';
 import Image from 'next/image';
+<<<<<<< HEAD
 import { FaSearch, FaHeart, FaRegHeart } from 'react-icons/fa';
+=======
+import { AiFillHeart, AiOutlineHeart } from 'react-icons/ai';
+>>>>>>> 7c5837e63bb275c41b3ad26848ac85d97a35a782
 
 interface Book {
   id: string;
@@ -19,7 +27,21 @@ interface Book {
   categories: string[];
 }
 
+<<<<<<< HEAD
 // Kategorileri tanımla
+=======
+interface Category {
+  id: string;
+  name: string;
+}
+
+interface Notification {
+  message: string;
+  type: 'success' | 'error' | 'info' | null;
+}
+
+// Kategorileri tanımla - Bu artık veritabanından gelecek
+>>>>>>> 7c5837e63bb275c41b3ad26848ac85d97a35a782
 const defaultCategories = [
   { id: 'all', name: 'Tüm Kitaplar' },
   { id: 'fiction', name: 'Kurgu' },
@@ -102,6 +124,7 @@ export default function BooksPage() {
   const [books, setBooks] = useState<Book[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+<<<<<<< HEAD
   const [searchTerm, setSearchTerm] = useState(urlSearchTerm);
   const [selectedCategories, setSelectedCategories] = useState<string[]>([urlCategory]);
   const [userToken, setUserToken] = useState<string | null>(null);
@@ -158,8 +181,146 @@ export default function BooksPage() {
     };
 
     fetchBooks();
-  }, []);
+=======
+  const [searchTerm, setSearchTerm] = useState<string>(urlSearchTerm);
+  const [selectedCategory, setSelectedCategory] = useState<string>(urlCategory);
+  const [notifications, setNotifications] = useState<Notification[]>([]);
+  const [userToken, setUserToken] = useState<string | null>(null);
+  const [bookFavorites, setBookFavorites] = useState<string[]>([]);
+  const [categories, setCategories] = useState<Category[]>([]);
+  const [notification, setNotification] = useState<Notification>({ message: '', type: null });
+  const router = useRouter();
+  const pathname = usePathname();
 
+  // Bildirim gösterme fonksiyonu
+  const showNotification = (message: string, type: 'success' | 'error' | 'info') => {
+    setNotification({ message, type });
+    setTimeout(() => setNotification({ message: '', type: null }), 3000); // 3 saniye sonra kaybolacak
+  };
+
+  // Kitapları getirme fonksiyonu
+  const fetchBooks = useCallback(async (selectedCategory?: string) => {
+    setLoading(true);
+    console.log("Kitaplar getiriliyor...");
+    
+    try {
+      const endpoint = selectedCategory && selectedCategory !== "all" 
+        ? `/api/books?category=${selectedCategory}` 
+        : '/api/books';
+      
+      console.log(`API isteği: ${endpoint}`);
+      const response = await fetch(endpoint);
+      
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error(`Kitapları getirme hatası: ${response.status} - ${errorText}`);
+        setLoading(false);
+        return;
+      }
+      
+      const data = await response.json();
+      console.log(`${data.length} kitap alındı`);
+      
+      // Kullanıcı giriş yapmışsa, favori durumunu kontrol et
+      if (userToken) {
+        console.log("Kullanıcı giriş yapmış, favoriler kontrol ediliyor");
+        const favResponse = await fetch('/api/favorites', {
+          headers: {
+            'Authorization': `Bearer ${userToken}`
+          }
+        });
+        
+        if (favResponse.ok) {
+          const favorites = await favResponse.json();
+          console.log(`${favorites.length} favori alındı`);
+          
+          // Favori kitap ID'lerini al
+          const favoriteBookIds = favorites.map((fav: any) => fav.bookId);
+          
+          // bookFavorites state'ini güncelle
+          setBookFavorites(favoriteBookIds);
+          
+          // Kitapların favori durumunu güncelle
+          const updatedBooks = data.map((book: Book) => {
+            const favorite = favorites.find((f: any) => f.bookId === book.id);
+            return {
+              ...book,
+              isFavorite: !!favorite,
+              favoriteId: favorite?.id
+            };
+          });
+          
+          setBooks(updatedBooks);
+        } else {
+          console.error("Favorileri getirme hatası");
+          setBooks(data);
+        }
+      } else {
+        console.log("Kullanıcı giriş yapmamış, normal kitap listesi gösteriliyor");
+        setBooks(data);
+      }
+    } catch (error) {
+      console.error("Kitapları getirme hatası:", error);
+    } finally {
+      setLoading(false);
+    }
+  }, [userToken]);
+  
+  // Kategorileri getirme fonksiyonu
+  const fetchCategories = useCallback(async () => {
+    console.log("Kategoriler getiriliyor...");
+    
+    try {
+      const response = await fetch('/api/categories');
+      
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error(`Kategorileri getirme hatası: ${response.status} - ${errorText}`);
+        return;
+      }
+      
+      const data = await response.json();
+      console.log(`${data.length} kategori alındı`);
+      
+      // "Tümü" kategorisini ekle
+      setCategories([{ id: 'all', name: 'Tümü' }, ...data]);
+    } catch (error) {
+      console.error("Kategorileri getirme hatası:", error);
+    }
+>>>>>>> 7c5837e63bb275c41b3ad26848ac85d97a35a782
+  }, []);
+  
+  // Kullanıcı token'ını al
+  useEffect(() => {
+    console.log("Token kontrol ediliyor...");
+    
+    const checkToken = () => {
+      const token = localStorage.getItem('token');
+      console.log("localStorage token durumu:", token ? "Var" : "Yok");
+      setUserToken(token);
+    };
+    
+    checkToken();
+    
+    // Token değişikliklerini dinle
+    window.addEventListener('storage', checkToken);
+    
+    return () => {
+      window.removeEventListener('storage', checkToken);
+    };
+  }, []);
+  
+  // Kitapları ve kategorileri ilk yüklemede getir
+  useEffect(() => {
+    console.log("Kitap ve kategori getirme useEffect çalışıyor");
+    
+    fetchCategories();
+    fetchBooks();
+    
+    // Kullanıcı token'ı değiştiğinde kitapları tekrar getir
+  }, [userToken, fetchBooks, fetchCategories]);
+
+<<<<<<< HEAD
   // Favori durumunu kontrol et
   useEffect(() => {
     const fetchFavorites = async () => {
@@ -192,6 +353,16 @@ export default function BooksPage() {
   }, [userToken]);
 
   // Kategori değiştirme
+=======
+  useEffect(() => {
+    // URL'den arama parametresi değiştiğinde searchTerm'i güncelle
+    setSearchTerm(urlSearchTerm);
+    // URL'den kategori parametresi değiştiğinde selectedCategory'i güncelle
+    setSelectedCategory(urlCategory);
+  }, [urlSearchTerm, urlCategory]);
+
+  // Kategori değiştirme işlemi
+>>>>>>> 7c5837e63bb275c41b3ad26848ac85d97a35a782
   const handleCategoryChange = (categoryId: string) => {
     const params = new URLSearchParams(searchParams.toString());
     
@@ -212,7 +383,114 @@ export default function BooksPage() {
     setSelectedCategories([categoryId]);
   };
 
+<<<<<<< HEAD
   // Arama işlemi
+=======
+  // Kitapları filtrele
+  const filteredBooks = books.filter(book => {
+    // Arama filtresi
+    const matchesSearch = searchTerm ? 
+      (book.title.toLowerCase().includes(searchTerm.toLowerCase()) || 
+       book.author.toLowerCase().includes(searchTerm.toLowerCase())) : 
+      true;
+    
+    // Kategori filtresi
+    const matchesCategory = selectedCategory === 'all' ? 
+      true : 
+      book.categories && book.categories.includes(selectedCategory);
+    
+    return matchesSearch && matchesCategory;
+  });
+
+  // Favoriye ekleme fonksiyonu
+  const addToFavorites = async (bookId: string) => {
+    if (!userToken) {
+      showNotification('Favori eklemek için giriş yapmalısınız', 'error');
+      return;
+    }
+
+    try {
+      const response = await fetch('/api/favorites', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${userToken}`
+        },
+        body: JSON.stringify({ bookId })
+      });
+
+      if (response.ok) {
+        const newFavorite = await response.json();
+        showNotification('Kitap favorilere eklendi', 'success');
+        
+        // Kitabın favori durumunu güncelle
+        setBooks(prevBooks => 
+          prevBooks.map(book => 
+            book.id === bookId 
+              ? { ...book, isFavorite: true, favoriteId: newFavorite.id } 
+              : book
+          )
+        );
+        
+        // BookFavorites state'ini güncelle
+        setBookFavorites(prev => [...prev, bookId]);
+      } else {
+        const error = await response.json();
+        showNotification(error.message || 'Kitap favorilere eklenemedi', 'error');
+      }
+    } catch (error) {
+      console.error('Favoriye ekleme hatası:', error);
+      showNotification('Bir hata oluştu, lütfen tekrar deneyin', 'error');
+    }
+  };
+
+  // Favoriden çıkarma fonksiyonu
+  const removeFromFavorites = async (bookId: string, favoriteId?: string) => {
+    if (!userToken) {
+      showNotification('Bu işlem için giriş yapmalısınız', 'error');
+      return;
+    }
+
+    try {
+      // FavoriteId biliniyorsa doğrudan o ID ile silme işlemi yap
+      // Bilinmiyorsa, kitap ID'si ile endpoint oluştur
+      const endpoint = favoriteId 
+        ? `/api/favorites/${favoriteId}` 
+        : `/api/favorites/book/${bookId}`;
+      
+      const response = await fetch(endpoint, {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${userToken}`
+        }
+      });
+
+      if (response.ok) {
+        showNotification('Kitap favorilerden çıkarıldı', 'success');
+        
+        // Kitabın favori durumunu güncelle
+        setBooks(prevBooks => 
+          prevBooks.map(book => 
+            book.id === bookId 
+              ? { ...book, isFavorite: false, favoriteId: undefined } 
+              : book
+          )
+        );
+        
+        // BookFavorites state'ini güncelle
+        setBookFavorites(prev => prev.filter(id => id !== bookId));
+      } else {
+        const error = await response.json();
+        showNotification(error.message || 'Kitap favorilerden çıkarılamadı', 'error');
+      }
+    } catch (error) {
+      console.error('Favoriden çıkarma hatası:', error);
+      showNotification('Bir hata oluştu, lütfen tekrar deneyin', 'error');
+    }
+  };
+
+  // Yerel aramayı yönet
+>>>>>>> 7c5837e63bb275c41b3ad26848ac85d97a35a782
   const handleSearch = (e: React.ChangeEvent<HTMLInputElement>) => {
     const value = e.target.value;
     setSearchTerm(value);
@@ -554,60 +832,41 @@ export default function BooksPage() {
                         position: 'absolute',
                         top: '1rem',
                         right: '1rem',
-                        zIndex: 10
+                        zIndex: 20
                       }}>
+                        {/* Favoriler Butonu */}
                         <button
-                          onClick={(e) => handleToggleFavorite(e, book.id)}
-                          aria-label={book.isFavorite ? "Favorilerden kaldır" : "Favorilere ekle"}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            if (book.isFavorite) {
+                              removeFromFavorites(book.id, book.favoriteId);
+                            } else {
+                              addToFavorites(book.id);
+                            }
+                          }}
                           style={{
-                            background: 'none',
-                            border: 'none',
-                            cursor: 'pointer',
-                            width: '1.75rem',
-                            height: '1.75rem',
-                            backgroundColor: book.isFavorite ? 'rgba(239, 68, 68, 0.2)' : 'rgba(255, 255, 255, 0.1)',
-                            borderRadius: '50%',
                             display: 'flex',
                             alignItems: 'center',
                             justifyContent: 'center',
-                            transition: 'all 0.2s ease'
+                            padding: '4px',
+                            borderRadius: '9999px',
+                            color: book.isFavorite ? '#ef4444' : '#94a3b8',
+                            transition: 'all 0.2s',
+                            background: 'rgba(17, 24, 39, 0.7)'
                           }}
+                          onMouseOver={(e) => {
+                            if (!book.isFavorite) {
+                              e.currentTarget.style.color = '#ef4444';
+                            }
+                          }}
+                          onMouseOut={(e) => {
+                            if (!book.isFavorite) {
+                              e.currentTarget.style.color = '#94a3b8';
+                            }
+                          }}
+                          aria-label={book.isFavorite ? "Favorilerden çıkar" : "Favorilere ekle"}
                         >
-                          <svg 
-                            width="16"
-                            height="16"
-                            fill={book.isFavorite ? '#ef4444' : 'none'}
-                            stroke={book.isFavorite ? '#ef4444' : 'white'}
-                            viewBox="0 0 24 24" 
-                            xmlns="http://www.w3.org/2000/svg"
-                          >
-                            <path 
-                              strokeLinecap="round" 
-                              strokeLinejoin="round" 
-                              strokeWidth="2"
-                              d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" 
-                            />
-                          </svg>
-                          <div 
-                            className="favorite-tooltip"
-                            style={{
-                              position: 'absolute', 
-                              bottom: 'calc(100% + 5px)',
-                              left: '50%',
-                              transform: 'translateX(-50%)',
-                              backgroundColor: 'rgba(0, 0, 0, 0.8)',
-                              color: 'white',
-                              padding: '0.5rem',
-                              borderRadius: '0.25rem',
-                              fontSize: '0.75rem',
-                              whiteSpace: 'nowrap',
-                              pointerEvents: 'none',
-                              opacity: 0,
-                              transition: 'opacity 0.2s ease'
-                            }}
-                          >
-                            {book.isFavorite ? 'Favorilerden Kaldır' : 'Favorilere Ekle'}
-                          </div>
+                          {book.isFavorite ? <AiFillHeart size={24} /> : <AiOutlineHeart size={24} />}
                         </button>
                       </div>
                       
@@ -648,7 +907,7 @@ export default function BooksPage() {
                         gap: '0.5rem',
                         marginBottom: '1rem' 
                       }}>
-                        {book.categories.map(categoryId => {
+                        {book.categories && book.categories.map(categoryId => {
                           const category = categories.find(c => c.id === categoryId);
                           if (!category) return null;
                           
