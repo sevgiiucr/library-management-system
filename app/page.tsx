@@ -219,13 +219,13 @@ export default function Home() {
                 margin: 0, 
                 fontSize: isMobile ? '1.25rem' : '1.5rem' 
               }}>
-                Kitaplar
+                Tüm Kitaplar
               </h3>
               <p style={{
                 margin: '0.5rem 0 0 0', 
                 fontSize: isMobile ? '0.8rem' : '0.9rem' 
               }}>
-                Tüm kitapları keşfedin
+                Kütüphane ve Open Library kitaplarını keşfedin
               </p>
             </div>
           </div>

@@ -46,12 +46,19 @@ export default function Dashboard() {
   }, []);
 
   useEffect(() => {
+    // Client tarafında olmadan localStorage'a erişmeye çalışma
+    if (!isClient) return;
+    
     const token = localStorage.getItem('accessToken');
     
     if (!token) {
-      router.push('/');
+      // Token yoksa, kullanıcıyı ana sayfaya yönlendir
+      console.log("Dashboard: Oturum bulunmuyor, ana sayfaya yönlendiriliyor");
+      router.replace('/'); // replace kullan, push yerine
       return;
     }
+    
+    console.log("Dashboard: Oturum açık, token:", token.substring(0, 10) + "...");
     
     // Her zamanki veri yükleme işlemlerine devam et
     setUserToken(token);
@@ -79,14 +86,14 @@ export default function Dashboard() {
         // Token yenilenemezse, oturumu sonlandır
         localStorage.removeItem('accessToken');
         localStorage.removeItem('user');
-        router.push('/login');
+        router.push('/app/page.tsx');
         return null;
       }
     } catch (error) {
       console.error('Token yenilenirken hata:', error);
       localStorage.removeItem('accessToken');
       localStorage.removeItem('user');
-      router.push('/login');
+      router.push('/app/page.tsx');
       return null;
     }
   };
@@ -229,6 +236,8 @@ export default function Dashboard() {
             bookId: borrow.book.id
           }));
         
+        console.log('Aktif ödünç sayısı (/api/borrows yoluyla):', activeBorrows.length);
+        
         if (activeBorrows && activeBorrows.length > 0) {
           setBorrowedBooks(activeBorrows);
           setError(null);
@@ -240,14 +249,29 @@ export default function Dashboard() {
         return;
       }
 
-      const data = await response.json();
+      let data;
+      try {
+        const responseText = await response.text();
+        console.log('API ham yanıt verisi:', responseText.substring(0, 100) + '...');
+        data = JSON.parse(responseText);
+      } catch (parseError) {
+        console.error('JSON ayrıştırma hatası:', parseError);
+        setError("Sunucu yanıtı işlenirken bir hata oluştu");
+        setLoading(false);
+        return;
+      }
+      
       console.log('API yanıt verisi:', data);
+      console.log('Veri tipi:', typeof data, Array.isArray(data) ? 'array' : 'not array');
+      console.log('Veri uzunluğu:', Array.isArray(data) ? data.length : 'N/A');
       
       if (data && Array.isArray(data)) {
         if (data.length > 0) {
+          console.log('Alınan ilk kitap örneği:', data[0]);
           setBorrowedBooks(data);
           setError(null);
         } else {
+          console.log('API kitap döndürdü ama liste boş');
           setBorrowedBooks([]);
           setError("Henüz ödünç aldığınız kitap bulunmuyor.");
         }
@@ -532,21 +556,52 @@ export default function Dashboard() {
               <h2 className="dashboard-section-title">Ödünç Aldığın Kitaplar</h2>
               <button
                 onClick={handleRefresh}
-                className="bg-blue-900/50 hover:bg-blue-800/60 text-blue-200 font-medium py-2 px-4 rounded-lg border border-blue-800/50 transition-all duration-200 flex items-center"
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  padding: '8px',
+                  backgroundColor: 'transparent',
+                  color: '#a1a1aa',
+                  border: '1px solid rgba(255, 255, 255, 0.05)',
+                  borderRadius: '50%',
+                  width: '32px',
+                  height: '32px',
+                  transition: 'all 0.2s ease',
+                  cursor: loading ? 'wait' : 'pointer'
+                }}
                 disabled={loading}
+                title="Yenile"
+                onMouseOver={(e) => {
+                  if (!loading) {
+                    e.currentTarget.style.backgroundColor = 'rgba(59, 130, 246, 0.1)';
+                    e.currentTarget.style.color = '#60a5fa';
+                    e.currentTarget.style.transform = 'rotate(30deg)';
+                  }
+                }}
+                onMouseOut={(e) => {
+                  if (!loading) {
+                    e.currentTarget.style.backgroundColor = 'transparent';
+                    e.currentTarget.style.color = '#a1a1aa';
+                    e.currentTarget.style.transform = 'rotate(0deg)';
+                  }
+                }}
               >
                 {loading ? (
-                  <>
-                    <div className="w-4 h-4 border-2 border-blue-200 border-t-transparent rounded-full animate-spin mr-2"></div>
-                    Yükleniyor...
-                  </>
+                  <div 
+                    style={{ 
+                      width: '16px', 
+                      height: '16px', 
+                      borderRadius: '50%', 
+                      border: '2px solid currentColor', 
+                      borderTopColor: 'transparent', 
+                      animation: 'spin 0.75s linear infinite' 
+                    }}
+                  />
                 ) : (
-                  <>
-                    <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                    </svg>
-                    Yenile
-                  </>
+                  <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                  </svg>
                 )}
               </button>
             </div>

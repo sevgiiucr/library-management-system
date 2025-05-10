@@ -17,3 +17,9 @@ export default {
     'autoprefixer': {},         // Tarayıcı uyumluluğu için önek ekleyen eklenti
   },
 };
+module.exports = {
+  plugins: {
+    tailwindcss: {},
+    autoprefixer: {},
+  },
+} 

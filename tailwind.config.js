@@ -4,14 +4,15 @@
  * Bu dosya, projenin Tailwind CSS yapılandırmasını tanımlar.
  * Tema uzantıları, eklentiler ve içerik yolları burada belirtilir.
  */
+/** @type {import('tailwindcss').Config} */
 module.exports = {
   // JIT modunu zorunlu aç
   mode: "jit",
   // İçerik yolları - Tailwind CSS'in hangi dosyaları tarayacağını belirtir
   content: [
-    './app/**/*.{js,ts,jsx,tsx,mdx}',     // App klasöründeki tüm dosyalar
-    './pages/**/*.{js,ts,jsx,tsx,mdx}',   // Pages klasöründeki tüm dosyalar
-    './components/**/*.{js,ts,jsx,tsx,mdx}', // Components klasöründeki tüm dosyalar
+    './pages/**/*.{js,ts,jsx,tsx,mdx}',
+    './components/**/*.{js,ts,jsx,tsx,mdx}',
+    './app/**/*.{js,ts,jsx,tsx,mdx}',
   ],
   
   // Safelist - JIT modunda daima dahil edilecek sınıflar
@@ -26,33 +27,41 @@ module.exports = {
     'justify-center',
     'justify-between',
     'space-y-4',
+    'space-y-6',
     // Renk sınıfları
     'bg-black',
+    'bg-black/60',
     'bg-gray-900',
     'bg-gray-800',
+    'bg-gray-800/90',
     'bg-gray-700',
+    'bg-gray-700/50',
     'bg-gray-600',
     'bg-purple-900',
+    'bg-purple-600',
+    'bg-purple-700',
     'bg-indigo-800',
     'text-white',
     'text-gray-400',
     'text-gray-300',
+    'text-gray-200',
     'text-amber-400',
     'text-amber-500',
     'text-amber-600',
     'text-purple-300',
     'text-purple-400',
     'text-purple-500',
-    'text-blue-400',
-    'text-violet-400',
-    'text-emerald-400',
-    'text-rose-400',
     'border-gray-700',
     'border-gray-600',
     'border-purple-700',
     'border-purple-500',
+    'border-red-800',
     'hover:border-purple-500',
     'hover:text-purple-300',
+    'hover:text-gray-200',
+    'hover:bg-purple-700',
+    'focus:border-purple-500',
+    'focus:ring-purple-500',
     'group-hover:text-purple-400',
     // Layout sınıfları
     'container',
@@ -71,13 +80,16 @@ module.exports = {
     'mb-2',
     'mb-3',
     'mb-4',
+    'mb-6',
     'mb-8',
     'mb-12',
     'mb-16',
     'mb-20',
+    'mt-4',
     'max-w-3xl',
     'max-w-4xl',
     'max-w-7xl',
+    'max-w-md',
     // Grid sınıfları
     'grid',
     'grid-cols-1',
@@ -100,6 +112,7 @@ module.exports = {
     'to-violet-800',
     'bg-gray-800/50',
     'bg-gray-800/30',
+    'bg-red-900/50',
     'backdrop-blur-sm',
     'backdrop-blur-md',
     // Boyut sınıfları
@@ -113,17 +126,21 @@ module.exports = {
     'md:text-4xl',
     'md:text-5xl',
     // Padding ve margin
+    'p-3',
     'p-4',
     'p-6',
     'p-8',
     // Border ve gölge
     'border',
+    'rounded-md',
     'rounded-lg',
     'rounded-xl',
     'rounded-2xl',
     'rounded-full',
     'shadow-md',
     'shadow-lg',
+    'shadow-xl',
+    'shadow-2xl',
     'overflow-hidden',
     // Konumlandırma
     'text-center',
@@ -131,12 +148,17 @@ module.exports = {
     'inline-block',
     'relative',
     'absolute',
+    'fixed',
     'inset-0',
     'z-10',
+    'z-50',
+    'transform',
     'opacity-20',
+    'opacity-70',
     // Geçiş efektleri
     'transition-colors',
     'transition-all',
+    'duration-150',
     'duration-300',
     // Font stilleri
     'font-bold',
@@ -149,8 +171,14 @@ module.exports = {
     'border-purple-500',
     // Cursor
     'cursor-pointer',
+    'cursor-not-allowed',
     // Grup
     'group',
+    // Diğer
+    'disabled:opacity-70',
+    'disabled:cursor-not-allowed',
+    'focus:ring-1',
+    'focus:ring-offset-0',
   ],
   
   theme: {
@@ -171,7 +199,7 @@ module.exports = {
           600: '#4f46e5',  // indigo-600
           700: '#4338ca',  // indigo-700
           800: '#3730a3',  // indigo-800
-        }
+        },
       },
       
       // Arka plan görüntülerini tanımlar
@@ -179,46 +207,9 @@ module.exports = {
         'gradient-radial': 'radial-gradient(var(--tw-gradient-stops))',
         'gradient-conic': 'conic-gradient(from 180deg at 50% 50%, var(--tw-gradient-stops))',
       },
-      
-      // Özel animasyonları tanımlar
-      animation: {
-        fadeIn: 'fadeIn 0.5s ease-in-out', // Fade-in animasyonu
-        modalOpen: 'modalOpen 0.3s ease-out forwards', // Modal açılış animasyonu
-      },
-      
-      // Özel keyframe'leri tanımlar
-      keyframes: {
-        fadeIn: {
-          '0%': { opacity: '0' },    // Başlangıç durumu (görünmez)
-          '100%': { opacity: '1' },  // Son durum (tamamen görünür)
-        },
-        modalOpen: {
-          '0%': { 
-            opacity: '0',
-            transform: 'scale(0.95) translateY(10px)'
-          },
-          '100%': { 
-            opacity: '1',
-            transform: 'scale(1) translateY(0)'
-          },
-        },
-      },
     },
   },
   
   // Tailwind CSS eklentileri
-  plugins: [
-    // Form elemanları için eklenti
-    require('@tailwindcss/forms'),
-    
-    // Özel kullanıcı tanımlı yardımcı sınıflar
-    function({ addUtilities }) {
-      addUtilities({
-        // Dancing Script fontu için özel yardımcı sınıf
-        '.dancing-script': {
-          fontFamily: '"Dancing Script", cursive',
-        },
-      })
-    },
-  ],
+  plugins: [require('@tailwindcss/forms')],
 } 

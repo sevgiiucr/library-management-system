@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { prisma } from "@/app/lib/prisma";
+import prisma from "@/app/lib/prisma";
 
 // GET /api/books/[id]/categories - Belirli bir kitabın kategorilerini getir
 export async function GET(
@@ -8,11 +8,14 @@ export async function GET(
 ) {
   try {
     const bookId = params.id;
+    console.log(`Kitap kategorileri getirme isteği: Kitap ID = ${bookId}`);
 
     // Kitabın var olup olmadığını kontrol et
     const book = await prisma.book.findUnique({
       where: { id: bookId },
     });
+
+    console.log("Bulunan kitap:", book ? "Kitap bulundu" : "Kitap bulunamadı");
 
     if (!book) {
       return NextResponse.json(
@@ -28,6 +31,8 @@ export async function GET(
       JOIN Category c ON bc.categoryId = c.id
       WHERE bc.bookId = ${bookId}
     `;
+
+    console.log("Kitap kategorileri:", bookCategories);
 
     return NextResponse.json(bookCategories, { status: 200 });
   } catch (error) {

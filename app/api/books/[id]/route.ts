@@ -56,7 +56,7 @@ export async function GET(
   { params }: { params: { id: string } }
 ) {
   try {
-    const id = params.id;
+    const { id } = params;
     
     // Kitabı ID'ye göre bul
     const book = await prisma.book.findUnique({
@@ -141,7 +141,7 @@ export async function PUT(
   { params }: { params: { id: string } }
 ) {
   try {
-    const id = params.id;
+    const { id } = params;
     const { title, author, published, imageUrl } = await request.json();
     
     console.log('API PUT - Alınan kitap verisi:', { 
@@ -253,7 +253,7 @@ export async function DELETE(
   { params }: { params: { id: string } }
 ) {
   try {
-    const id = params.id;
+    const { id } = params;
     
     // Kitabın var olup olmadığını kontrol et
     const existingBook = await prisma.book.findUnique({
@@ -310,45 +310,28 @@ export async function PATCH(
   { params }: { params: { id: string } }
 ) {
   try {
+    // Burada params nesnesinden id'yi doğrudan çıkarmak yerine, 
+    // await ile beklememiz gerekiyor
     const id = params.id;
     console.log("API PATCH: Kitap id:", id);
-    
+
     // İstek gövdesini al
-    const requestData = await request.json();
-    const { action, userId } = requestData;
+    const requestBody = await request.json();
+    const { action, userId } = requestBody;
+    
     console.log("API PATCH: İşlem:", action, "Kullanıcı id:", userId);
     
-    if (!action || (action !== 'borrow' && action !== 'return')) {
+    if (!action || !userId) {
       return NextResponse.json(
-        { error: 'Geçerli bir işlem belirtilmelidir (borrow veya return)' },
+        { error: 'İşlem (action) ve kullanıcı ID (userId) gereklidir' },
         { status: 400 }
       );
     }
     
-    if (action === 'borrow' && !userId) {
-      return NextResponse.json(
-        { error: 'Kitabı ödünç almak için kullanıcı ID gereklidir' },
-        { status: 400 }
-      );
-    }
-    
-    // Kitabı bul
+    // Kitabı veritabanından bul
     console.log("API PATCH: Kitap veritabanından aranıyor");
     const book = await prisma.book.findUnique({
-      where: { id },
-      include: {
-        borrows: {
-          where: {
-            returnDate: null
-          },
-          include: {
-            user: true
-          }
-        }
-      }
-    }).catch(err => {
-      console.error("API PATCH: Kitap arama hatası:", err);
-      return null;
+      where: { id }
     });
     
     if (!book) {
@@ -359,141 +342,126 @@ export async function PATCH(
       );
     }
     
-    // Ödünç alma işlemi
-    if (action === 'borrow') {
-      // Kitap zaten ödünç alınmışsa hata ver
-      if (!book.available || book.borrows.length > 0) {
-        console.log("API PATCH: Kitap müsait değil");
-        return NextResponse.json(
-          { error: 'Kitap şu anda müsait değil' },
-          { status: 400 }
-        );
-      }
-      
-      try {
-        console.log("API PATCH: Ödünç alma kaydı oluşturuluyor");
-        
-        // Kullanıcı kontrolü - Test ortamı için esnek
-        let userExists = false;
-        try {
-          // Kullanıcıyı doğrula
-          const user = await prisma.user.findUnique({
-            where: { id: userId }
-          });
-          
-          if (user) {
-            userExists = true;
-            console.log("API PATCH: Kullanıcı bulundu:", user.id, user.name);
-          } else {
-            // Kullanıcı bulunamadı, test için yeni bir kullanıcı oluştur
-            console.log("API PATCH: Kullanıcı bulunamadı, test için yeni kullanıcı oluşturuluyor");
-            const newUser = await prisma.user.create({
-              data: {
-                id: userId,
-                name: "Test Kullanıcısı",
-                email: "test-" + userId + "@example.com",
-                password: "test123" // Gerçek ortamda bu şekilde yapılmamalı!
-              }
-            });
-            userExists = true;
-            console.log("API PATCH: Test kullanıcısı oluşturuldu:", newUser.id);
-          }
-        } catch (userError) {
-          console.error("API PATCH: Kullanıcı işlemi hatası:", userError);
-          return NextResponse.json(
-            { error: 'Kullanıcı doğrulaması sırasında hata: ' + (userError as Error).message },
-            { status: 500 }
-          );
-        }
-        
-        if (!userExists) {
-          return NextResponse.json(
-            { error: 'Kullanıcı bulunamadı ve oluşturulamadı' },
-            { status: 404 }
-          );
-        }
-        
-        // Ödünç alma kaydı oluştur
-        const borrowRecord = await prisma.borrow.create({
-          data: {
-            userId,
-            bookId: id
-          }
-        });
-        console.log("API PATCH: Borrow kaydı oluşturuldu:", borrowRecord);
-        
-        console.log("API PATCH: Kitap durumu güncelleniyor");
-        // Kitabın durumunu güncelle
-        const updatedBook = await prisma.book.update({
-          where: { id },
-          data: { available: false }
-        });
-        console.log("API PATCH: Kitap güncellendi:", updatedBook);
-        
-        return NextResponse.json({ 
-          message: 'Kitap başarıyla ödünç alındı',
-          bookId: id,
-          available: false,
-          borrowId: borrowRecord.id
-        });
-      } catch (dbError) {
-        console.error("API PATCH: Veritabanı işlemi hatası:", dbError);
-        return NextResponse.json(
-          { error: 'Veritabanı işlemi sırasında hata oluştu: ' + (dbError as Error).message },
-          { status: 500 }
-        );
-      }
-    } 
-    // İade işlemi
-    else if (action === 'return') {
-      // Kitap ödünç alınmamışsa hata ver
-      if (book.available || book.borrows.length === 0) {
-        console.log("API PATCH: Kitap zaten kütüphanede");
-        return NextResponse.json(
-          { error: 'Bu kitap zaten kütüphanede mevcut' },
-          { status: 400 }
-        );
-      }
-      
-      try {
-        console.log("API PATCH: Ödünç alma kaydı güncelleniyor");
-        // Ödünç alma kaydını güncelle
-        const borrowRecord = await prisma.borrow.update({
-          where: { id: book.borrows[0].id },
-          data: { returnDate: new Date() }
-        });
-        console.log("API PATCH: Borrow kaydı güncellendi:", borrowRecord);
-        
-        console.log("API PATCH: Kitap durumu güncelleniyor");
-        // Kitabın durumunu güncelle
-        const updatedBook = await prisma.book.update({
-          where: { id },
-          data: { available: true }
-        });
-        console.log("API PATCH: Kitap güncellendi:", updatedBook);
-        
-        return NextResponse.json({ 
-          message: 'Kitap başarıyla iade edildi',
-          bookId: id,
-          available: true
-        });
-      } catch (dbError) {
-        console.error("API PATCH: Veritabanı işlemi hatası:", dbError);
-        return NextResponse.json(
-          { error: 'Veritabanı işlemi sırasında hata oluştu: ' + (dbError as Error).message },
-          { status: 500 }
-        );
-      }
+    // Kullanıcıyı kontrol et
+    const user = await prisma.user.findUnique({
+      where: { id: userId }
+    });
+    
+    if (!user) {
+      console.log("API PATCH: Kullanıcı bulunamadı");
+      return NextResponse.json(
+        { error: 'Kullanıcı bulunamadı' },
+        { status: 404 }
+      );
     }
     
-    return NextResponse.json(
-      { error: 'Geçersiz işlem' },
-      { status: 400 }
-    );
+    console.log("API PATCH: Kullanıcı bulundu:", userId, user.name.charAt(0));
+    
+    if (action === 'borrow') {
+      // Kitap zaten ödünç alınmışsa hata ver
+      if (book.available === false) {
+        console.log("API PATCH: Kitap zaten ödünç alınmış");
+        return NextResponse.json(
+          { error: 'Bu kitap zaten ödünç alınmış' },
+          { status: 400 }
+        );
+      }
+      
+      // Kullanıcı kitabı ödünç almak istiyor, kitabı ve borrow tablosunu güncelle
+      console.log("API PATCH: Ödünç alma kaydı oluşturuluyor");
+      // Önce borrows tablosuna yeni kayıt ekle
+      const borrow = await prisma.borrow.create({
+        data: {
+          userId,
+          bookId: id,
+          borrowDate: new Date(),
+          returnDate: null
+        }
+      });
+      
+      console.log("API PATCH: Borrow kaydı oluşturuldu:", borrow);
+      
+      // Sonra kitabın available durumunu false yap
+      console.log("API PATCH: Kitap durumu güncelleniyor");
+      const updatedBook = await prisma.book.update({
+        where: { id },
+        data: { available: false }
+      });
+      
+      console.log("API PATCH: Kitap güncellendi:", updatedBook);
+      
+      // Başarılı yanıt döndür
+      return NextResponse.json(
+        { message: 'Kitap başarıyla ödünç alındı', book: updatedBook },
+        { status: 200 }
+      );
+    } 
+    else if (action === 'return') {
+      // Kitap zaten müsaitse hata ver
+      if (book.available === true) {
+        console.log("API PATCH: Kitap zaten müsait");
+        return NextResponse.json(
+          { error: 'Bu kitap zaten iade edilmiş durumda' },
+          { status: 400 }
+        );
+      }
+      
+      // Kullanıcının en son bu kitabı ödünç aldığı kaydı bul
+      console.log("API PATCH: Aktif ödünç alma kaydı aranıyor");
+      const borrow = await prisma.borrow.findFirst({
+        where: {
+          bookId: id,
+          userId,
+          returnDate: null
+        },
+        orderBy: {
+          borrowDate: 'desc'
+        }
+      });
+      
+      if (!borrow) {
+        console.log("API PATCH: Bu kitap için aktif ödünç alma kaydı bulunamadı");
+        return NextResponse.json(
+          { error: 'Bu kitap için ödünç alma kaydı bulunamadı' },
+          { status: 404 }
+        );
+      }
+      
+      // Ödünç alma kaydını güncelle (iade tarihi ekle)
+      console.log("API PATCH: Ödünç alma kaydı güncelleniyor, ID:", borrow.id);
+      const updatedBorrow = await prisma.borrow.update({
+        where: { id: borrow.id },
+        data: { returnDate: new Date() }
+      });
+      
+      console.log("API PATCH: Ödünç alma kaydı güncellendi:", updatedBorrow);
+      
+      // Kitabın durumunu available yap
+      console.log("API PATCH: Kitap durumu güncelleniyor");
+      const updatedBook = await prisma.book.update({
+        where: { id },
+        data: { available: true }
+      });
+      
+      console.log("API PATCH: Kitap güncellendi:", updatedBook);
+      
+      // Başarılı yanıt döndür
+      return NextResponse.json(
+        { message: 'Kitap başarıyla iade edildi', book: updatedBook },
+        { status: 200 }
+      );
+    } 
+    else {
+      console.log("API PATCH: Geçersiz işlem:", action);
+      return NextResponse.json(
+        { error: 'Geçersiz işlem. Action "borrow" veya "return" olmalıdır' },
+        { status: 400 }
+      );
+    }
   } catch (error) {
-    console.error('API PATCH: Genel hata:', error);
+    console.error('Kitap işlemi hatası:', error);
     return NextResponse.json(
-      { error: 'İşlem sırasında bir hata oluştu: ' + (error as Error).message },
+      { error: 'Kitap işlemi sırasında bir hata oluştu' },
       { status: 500 }
     );
   }

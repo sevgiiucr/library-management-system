@@ -1,5 +1,3 @@
-'use client';
-
 import './globals.css';
 import Navbar from './components/Navbar';
 
@@ -24,18 +22,6 @@ export default function RootLayout({
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
         <link href="https://fonts.googleapis.com/css2?family=Dancing+Script:wght@400..700&family=Poppins:wght@300;400;500;600&display=swap" rel="stylesheet" />
-        <style>{`
-          html, body {
-            margin: 0;
-            padding: 0;
-            width: 100%;
-            height: 100%;
-            background-color: #000;
-            color: #fff;
-            font-family: 'Poppins', sans-serif;
-            overflow-x: hidden;
-          }
-        `}</style>
       </head>
       <body>
         <Navbar />

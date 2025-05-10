@@ -16,6 +16,12 @@ model Book {
   updatedAt   DateTime   @updatedAt
   available   Boolean    @default(true)
   imageUrl    String?    @db.Text
+  description String?    @db.Text
+  externalId  String?    // Open Library ID
+  isbn        String?    // ISBN numarası
+  publisher   String?    // Yayınevi
+  language    String?    // Kitabın dili
+  addedBy     String?    // Kitabı ekleyen kullanıcı
   borrows     Borrow[]
   favoritedBy Favorite[]
   categories  BookCategory[]

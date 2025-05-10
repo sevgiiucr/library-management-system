@@ -2,42 +2,36 @@
 
 import React, { useState, CSSProperties, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-
-// Kitap tipi
-interface Book {
-  id: string;
-  title: string;
-  author: string;
-  published: number;
-  available: boolean;
-  imageUrl?: string;
-  currentBorrow?: {
-    id: string;
-    userId: string;
-    borrowDate: string;
-    user: {
-      id: string;
-      name: string;
-      email: string;
-    }
-  } | null;
-}
-
-// Props tipi
-interface BookDetailClientProps {
-  book: Book;
-}
+import { BookDetailClientProps, FavoriteStatus, Book, OpenLibraryBook } from "../interfaces/book";
+import AddToFavorite from "./AddToFavorite";
+import BorrowBook from "./BorrowBook";
+import toast from "react-hot-toast";
 
 /**
  * Kitap Detay Client Bileşeni
  * Kitap bilgilerini gösterir ve etkileşimli özellikleri sağlar
  */
-export default function BookDetailClient({ book }: BookDetailClientProps) {
-  // Router
+export default function BookDetailClient({ 
+  book, 
+  bookId,
+  source = 'local' 
+}: BookDetailClientProps) {
   const router = useRouter();
+  const [favoriteStatus, setFavoriteStatus] = useState<FavoriteStatus>({
+    isFavorite: !!book.isFavorite,
+    favoriteId: book.favoriteId
+  });
+  
+  const isOpenLibrary = source === 'openLibrary';
+  const isLocalBook = source === 'local';
 
-  // State tanımlamaları
-  const [bookData, setBookData] = useState<Book>(book);
+  // State tanımlamaları - Book tipini kullanmak için güvenli dönüşüm
+  const [bookData, setBookData] = useState<Book>({
+    ...(book as any),
+    id: (book as any).id || bookId || '', // OpenLibrary kitapları için bookId kullanılır
+    available: book.available ?? true
+  });
+  
   const [isBorrowing, setIsBorrowing] = useState<boolean>(false);
   const [actionMessage, setActionMessage] = useState<string | null>(null);
   const [messageType, setMessageType] = useState<'success' | 'error' | null>(null);
@@ -46,72 +40,214 @@ export default function BookDetailClient({ book }: BookDetailClientProps) {
     name: '',
     email: ''
   });
+  const [userToken, setUserToken] = useState<string | null>(null);
 
   // LocalStorage'dan kullanıcı bilgilerini al
   useEffect(() => {
-    const userStr = localStorage.getItem('user');
-    const token = localStorage.getItem('accessToken');
-    
-    if (userStr && token) {
-      try {
-        const user = JSON.parse(userStr);
-        setCurrentUser({
-          id: user.id || '',
-          name: user.name || 'Misafir Kullanıcı',
-          email: user.email || ''
-        });
-      } catch (error) {
-        console.error('Kullanıcı bilgileri alınamadı:', error);
-      }
-    } else {
-      router.push('/login');
+    if (typeof window === 'undefined') {
+      return;
     }
-  }, [router]);
+    
+    try {
+      const userStr = localStorage.getItem('user');
+      const token = localStorage.getItem('accessToken');
+      
+      if (userStr && token) {
+        try {
+          const user = JSON.parse(userStr);
+          
+          setCurrentUser({
+            id: user.id || '',
+            name: user.name || 'Misafir Kullanıcı',
+            email: user.email || ''
+          });
+          setUserToken(token);
+          
+          // Yerel kitap ise favori durumunu kontrol et
+          if (isLocalBook && (book as Book).id) {
+            checkFavoriteStatus(token, (book as Book).id);
+          }
+        } catch (error) {
+          console.error('Kullanıcı bilgileri alınamadı:', error);
+        }
+      }
+    } catch (error) {
+      console.error("useEffect içinde hata:", error);
+    }
+  }, [router, book, isLocalBook]);
+  
+  // Favori durumunu kontrol et
+  const checkFavoriteStatus = async (token: string, bookId: string) => {
+    try {
+      const response = await fetch('/api/favorites', {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+      
+      if (response.ok) {
+        const responseText = await response.text();
+        
+        let favorites;
+        try {
+          favorites = JSON.parse(responseText);
+        } catch (e) {
+          console.error("JSON parse hatası:", e);
+          return;
+        }
+        
+        if (Array.isArray(favorites)) {
+          const favorite = favorites.find(fav => fav.bookId === bookId);
+          if (favorite) {
+            setFavoriteStatus({
+              isFavorite: true,
+              favoriteId: favorite.id
+            });
+          } else {
+            setFavoriteStatus({
+              isFavorite: false,
+              favoriteId: undefined
+            });
+          }
+        }
+      }
+    } catch (error) {
+      console.error("Favori durumu kontrol hatası:", error);
+    }
+  };
+  
+  // Kullanıcının favorilerini kontrol et (OpenLibrary kitapları için)
+  useEffect(() => {
+    if (isOpenLibrary && bookId) {
+      const checkFavoriteStatus = async () => {
+        try {
+          const response = await fetch(`/api/favorites/check?externalId=${bookId}`);
+          if (response.ok) {
+            const data = await response.json();
+            setFavoriteStatus({
+              isFavorite: data.isFavorite,
+              favoriteId: data.favoriteId
+            });
+          }
+        } catch (error) {
+          console.error("Favori durumu kontrol edilemedi:", error);
+        }
+      };
+      
+      checkFavoriteStatus();
+    }
+  }, [isOpenLibrary, bookId]);
+
+  const handleAddToFavorites = async () => {
+    if (!isOpenLibrary && !isLocalBook) return;
+    
+    try {
+      if (favoriteStatus.isFavorite) {
+        // Favorilerden çıkar
+        if (favoriteStatus.favoriteId) {
+          const response = await fetch(`/api/favorites/${favoriteStatus.favoriteId}`, {
+            method: "DELETE",
+          });
+          
+          if (response.ok) {
+            setFavoriteStatus({ isFavorite: false });
+            toast.success("Favorilerden çıkarıldı");
+            if (isLocalBook) router.refresh();
+          } else {
+            toast.error("Favorilerden çıkarılamadı");
+          }
+        }
+      } else {
+        // Favorilere ekle
+        const payload = isOpenLibrary 
+          ? { 
+              externalId: bookId,
+              title: book.title,
+              author: book.author,
+              published: book.published,
+              imageUrl: book.imageUrl
+            }
+          : { bookId: (book as Book).id };
+        
+        const endpoint = isOpenLibrary ? "/api/favorites/external" : "/api/favorites";
+        
+        const response = await fetch(endpoint, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(payload),
+        });
+        
+        if (response.ok) {
+          const data = await response.json();
+          setFavoriteStatus({ 
+            isFavorite: true,
+            favoriteId: data.id 
+          });
+          toast.success("Favorilere eklendi");
+          if (isLocalBook) router.refresh();
+        } else {
+          toast.error("Favorilere eklenemedi");
+        }
+      }
+    } catch (error) {
+      console.error("Favori işlemi başarısız:", error);
+      toast.error("Bir hata oluştu, lütfen tekrar deneyin");
+    }
+  };
+
+  // JWT'den userId çekmek için yardımcı fonksiyon
+  function getUserIdFromToken(token: string | null): string | null {
+    if (!token) return null;
+    try {
+      const payload = JSON.parse(atob(token.split('.')[1]));
+      return payload.userId;
+    } catch {
+      return null;
+    }
+  }
 
   // Kitabı ödünç alma işlemi
   const handleBorrowBook = async () => {
+    if (!userToken) {
+      setActionMessage('Kitap ödünç almak için giriş yapmalısınız');
+      setMessageType('error');
+      return;
+    }
+
+    setIsBorrowing(true);
+    setActionMessage(null);
+
+    const userId = getUserIdFromToken(userToken);
+    if (!userId) {
+      setActionMessage('Kullanıcı kimliği bulunamadı. Lütfen tekrar giriş yapın.');
+      setMessageType('error');
+      setIsBorrowing(false);
+      return;
+    }
+
     try {
-      if (!bookData || !bookData.available) return;
-      
-      const token = localStorage.getItem('accessToken');
-      if (!token) {
-        router.push('/login');
-        return;
-      }
-      
-      setIsBorrowing(true);
-      setActionMessage(null);
-      setMessageType(null);
-      
-      console.log(`Kitap ödünç alma işlemi başlatılıyor: ID=${bookData.id}, User=${currentUser.id}`);
-      
       const response = await fetch(`/api/books/${bookData.id}`, {
         method: 'PATCH',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
+          'Authorization': `Bearer ${userToken}`
         },
         body: JSON.stringify({
           action: 'borrow',
-          userId: currentUser.id
-        }),
+          userId
+        })
       });
-      
-      console.log('Ödünç alma yanıtı:', response.status, response.statusText);
-      
-      // Yanıtı tek seferde JSON'a dönüştür ve sakla
+
       const responseData = await response.json();
-      console.log('Ödünç alma yanıt verisi:', responseData);
-      
+
       if (!response.ok) {
         throw new Error(responseData.error || 'Kitap ödünç alınırken bir hata oluştu');
       }
-      
-      // Ödünç alma kaydının ID'sini doğru şekilde al
-      const borrowId = responseData.borrowId || 'temp-id';
-      console.log('Oluşturulan ödünç ID:', borrowId);
-      
-      // Başarılı yanıtta, response.json() yerine zaten parse edilmiş responseData kullan
+
+      // Update local state (güvenli id alma)
+      const borrowId = responseData.borrow?.id || responseData.id || '';
       setBookData({
         ...bookData,
         available: false,
@@ -122,20 +258,19 @@ export default function BookDetailClient({ book }: BookDetailClientProps) {
           user: {
             id: currentUser.id,
             name: currentUser.name,
-            email: currentUser.email || ''
+            email: currentUser.email
           }
         }
       });
-      
+
       setActionMessage('Kitap başarıyla ödünç alındı!');
       setMessageType('success');
-      
-      // Veritabanının güncellenebilmesi için daha uzun bir bekleme süresi
+
+      // Redirect to dashboard after a delay
       setTimeout(() => {
-        console.log('Dashboard sayfasına yönlendiriliyor...');
         router.push('/dashboard');
-      }, 5000);
-      
+      }, 2000);
+
     } catch (err: any) {
       console.error('Kitap ödünç alma hatası:', err);
       setActionMessage(err.message || 'Kitap ödünç alınırken bir hata oluştu');
@@ -147,65 +282,57 @@ export default function BookDetailClient({ book }: BookDetailClientProps) {
   
   // Kitabı iade etme işlemi
   const handleReturnBook = async () => {
+    if (!userToken) {
+      setActionMessage('Kitap iade etmek için giriş yapmalısınız');
+      setMessageType('error');
+      return;
+    }
+
+    setIsBorrowing(true);
+    setActionMessage(null);
+
+    const userId = getUserIdFromToken(userToken);
+    if (!userId) {
+      setActionMessage('Kullanıcı kimliği bulunamadı. Lütfen tekrar giriş yapın.');
+      setMessageType('error');
+      setIsBorrowing(false);
+      return;
+    }
+
     try {
-      if (!bookData || bookData.available) return;
-      
-      const token = localStorage.getItem('accessToken');
-      if (!token) {
-        router.push('/login');
-        return;
-      }
-      
-      // Kullanıcı sadece kendi ödünç aldığı kitabı iade edebilir
-      if (bookData.currentBorrow?.userId !== currentUser.id) {
-        setActionMessage('Sadece kitabı ödünç alan kullanıcı iade edebilir');
-        setMessageType('error');
-        return;
-      }
-      
-      setIsBorrowing(true);
-      setActionMessage(null);
-      setMessageType(null);
-      
-      console.log(`Kitap iade işlemi başlatılıyor: ID=${bookData.id}, User=${currentUser.id}`);
-      
       const response = await fetch(`/api/books/${bookData.id}`, {
         method: 'PATCH',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
+          'Authorization': `Bearer ${userToken}`
         },
         body: JSON.stringify({
-          action: 'return'
-        }),
+          action: 'return',
+          userId
+        })
       });
-      
-      console.log('İade yanıtı:', response.status, response.statusText);
-      
-      // Yanıtı tek seferde JSON'a dönüştür ve sakla
+
       const responseData = await response.json();
-      console.log('İade yanıt verisi:', responseData);
-      
+
       if (!response.ok) {
         throw new Error(responseData.error || 'Kitap iade edilirken bir hata oluştu');
       }
-      
-      // Başarılı yanıtta, response.json() yerine zaten parse edilmiş responseData kullan
+
+      // Update local state
       setBookData({
         ...bookData,
         available: true,
         currentBorrow: null
       });
-      
+
       setActionMessage('Kitap başarıyla iade edildi!');
       setMessageType('success');
-      
-      // Veritabanının güncellenebilmesi için daha uzun bir bekleme süresi
+
+      // Redirect to dashboard after a delay
       setTimeout(() => {
-        console.log('Dashboard sayfasına yönlendiriliyor...');
         router.push('/dashboard');
-      }, 3000);
-      
+      }, 2000);
+
     } catch (err: any) {
       console.error('Kitap iade hatası:', err);
       setActionMessage(err.message || 'Kitap iade edilirken bir hata oluştu');
@@ -397,7 +524,16 @@ export default function BookDetailClient({ book }: BookDetailClientProps) {
                 
                 {/* Kitap bilgileri bölümü */}
                 <div style={{ flex: '1', minWidth: '300px' }}>
-                  <h1 style={titleStyle}>{bookData.title}</h1>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                    <h1 style={titleStyle}>{bookData.title}</h1>
+                    
+                    {/* Favori butonu */}
+                    <AddToFavorite 
+                      isFavorite={favoriteStatus.isFavorite} 
+                      onClick={handleAddToFavorites} 
+                    />
+                  </div>
+                  
                   <p style={authorStyle}>{bookData.author}</p>
                   
                   <div style={infoContainerStyle}>
@@ -434,30 +570,24 @@ export default function BookDetailClient({ book }: BookDetailClientProps) {
                   
                   {/* Kitap işlem butonları */}
                   <div style={buttonContainerStyle}>
-                    {bookData.available ? (
-                      <button 
-                        onClick={handleBorrowBook}
-                        disabled={isBorrowing}
-                        style={{
-                          ...buttonStyle,
-                          opacity: isBorrowing ? 0.7 : 1,
-                        }}
+                    {isLocalBook && (
+                      <BorrowBook 
+                        bookId={bookData.id}
+                        isAvailable={bookData.available}
+                        currentBorrow={bookData.currentBorrow}
+                      />
+                    )}
+                    
+                    {isOpenLibrary && (
+                      <a
+                        href={`https://openlibrary.org/works/${bookId}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="px-4 py-2 text-sm font-medium text-blue-600 bg-blue-50 rounded-md hover:bg-blue-100 transition-colors"
                       >
-                        {isBorrowing ? 'İşlem yapılıyor...' : 'Ödünç Al'}
-                      </button>
-                    ) : bookData.currentBorrow?.userId === currentUser.id ? (
-                      <button 
-                        onClick={handleReturnBook}
-                        disabled={isBorrowing}
-                        style={{
-                          ...buttonStyle,
-                          backgroundColor: 'rgba(16, 185, 129, 0.8)',
-                          opacity: isBorrowing ? 0.7 : 1,
-                        }}
-                      >
-                        {isBorrowing ? 'İşlem yapılıyor...' : 'İade Et'}
-                      </button>
-                    ) : null}
+                        Open Library'de Görüntüle
+                      </a>
+                    )}
                   </div>
                   
                   {/* İşlem mesajı */}

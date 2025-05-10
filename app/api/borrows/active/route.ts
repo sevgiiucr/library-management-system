@@ -43,22 +43,41 @@ export async function GET(request: Request) {
 
     console.log(`Kullanıcı ${decoded.userId} için ${borrows.length} aktif ödünç bulundu`);
 
+    // Borrows boş mu kontrol et
+    if (borrows.length === 0) {
+      console.log('Kullanıcının aktif ödünç aldığı kitap bulunmuyor');
+      return NextResponse.json([]);
+    }
+
     // Yanıt formatını düzenle - Frontend'in beklediği yapıya uygun olmalı
-    const formattedBorrows = borrows.map((borrow: Borrow & { book: Book }) => ({
-      id: borrow.id,
-      title: borrow.book.title,
-      author: borrow.book.author,
-      published: borrow.book.published || 2024,
-      borrowDate: borrow.borrowDate.toISOString(),
-      returnDate: borrow.returnDate ? borrow.returnDate.toISOString() : null,
-      bookId: borrow.book.id
-    }));
+    try {
+      const formattedBorrows = borrows.map((borrow: Borrow & { book: Book }) => ({
+        id: borrow.id,
+        title: borrow.book.title,
+        author: borrow.book.author,
+        published: borrow.book.published || 2024,
+        borrowDate: borrow.borrowDate.toISOString(),
+        returnDate: borrow.returnDate ? borrow.returnDate.toISOString() : null,
+        bookId: borrow.book.id
+      }));
 
-    // API yanıtını kontrol için log
-    console.log('API yanıtı:', formattedBorrows.length ? 'Veri var' : 'Veri boş', 
-      formattedBorrows.length > 0 ? formattedBorrows[0] : '[]');
+      // API yanıtını kontrol için log
+      console.log('API yanıtı:', formattedBorrows.length ? 'Veri var' : 'Veri boş', 
+        formattedBorrows.length > 0 ? JSON.stringify(formattedBorrows[0]) : '[]');
 
-    return NextResponse.json(formattedBorrows);
+      console.log('Toplam ödünç sayısı:', formattedBorrows.length);
+      return NextResponse.json(formattedBorrows);
+    } catch (err) {
+      console.error('Yanıt formatlanırken hata oluştu:', err);
+      // Hata durumunda daha basit bir yanıt dön
+      const simpleResponse = borrows.map((borrow: any) => ({
+        id: borrow.id,
+        title: borrow.book.title,
+        author: borrow.book.author,
+        borrowDate: borrow.borrowDate.toISOString()
+      }));
+      return NextResponse.json(simpleResponse);
+    }
   } catch (error) {
     console.error('Ödünç alınan kitaplar getirilirken hata:', error);
     return NextResponse.json(

@@ -1,8 +1,10 @@
 import { NextResponse } from 'next/server';
 import { PrismaClient } from '@prisma/client';
+import { NextRequest } from 'next/server';
+import prisma from '@/app/lib/prisma';
 
 // Prisma veritabanı bağlantısını başlat
-const prisma = new PrismaClient();
+const prismaClient = new PrismaClient();
 
 // ===================================
 // GET - Tüm Kitapları Listeleme Endpoint'i
@@ -37,10 +39,49 @@ const prisma = new PrismaClient();
  *   }
  * ]
  */
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
-    // Tüm kitapları ve ilişkili ödünç alma kayıtlarını getir
-    const books = await prisma.book.findMany({
+    // Sorgu parametrelerini al
+    const searchParams = request.nextUrl.searchParams;
+    const source = searchParams.get('source');
+
+    // Open Library kaynağından gelen kitapları getir
+    if (source === 'openlibrary') {
+      const openLibraryBooks = await prismaClient.book.findMany({
+        where: {
+          externalId: {
+            not: null
+          }
+        } as any,
+        include: {
+          categories: {
+            include: {
+              category: true
+            }
+          }
+        },
+        orderBy: {
+          title: 'asc'
+        }
+      });
+
+      // Kitapları istemci tarafından kullanılabilir formata dönüştür
+      const formattedBooks = openLibraryBooks.map((book: any) => ({
+        id: book.id,
+        title: book.title,
+        author: book.author,
+        published: book.published,
+        available: book.available,
+        imageUrl: book.imageUrl,
+        externalId: book.externalId,
+        categories: book.categories.map((bc: any) => bc.category.id)
+      }));
+
+      return NextResponse.json(formattedBooks);
+    }
+
+    // Standart kitap listesi
+    const books = await prismaClient.book.findMany({
       include: {
         // Sadece iade edilmemiş ödünç alma kayıtlarını dahil et
         borrows: {
@@ -57,12 +98,41 @@ export async function GET() {
               }
             }
           }
+        },
+        // Kategori ilişkilerini dahil et
+        categories: {
+          include: {
+            category: true
+          }
         }
       }
     });
 
+    // Kitapları istemci tarafından kullanılabilir formata dönüştür
+    const formattedBooks = books.map((book: any) => ({
+      id: book.id,
+      title: book.title,
+      author: book.author,
+      published: book.published,
+      available: book.available,
+      imageUrl: book.imageUrl,
+      description: book.description,
+      externalId: book.externalId,
+      isbn: book.isbn,
+      publisher: book.publisher,
+      language: book.language,
+      // Kategorileri düzenle
+      categories: book.categories.map((bc: any) => bc.category.id),
+      // Ödünç alma bilgileri
+      currentBorrow: book.borrows.length > 0 ? {
+        id: book.borrows[0].id,
+        borrowDate: book.borrows[0].borrowDate,
+        user: book.borrows[0].user
+      } : null
+    }));
+
     // Başarılı yanıt döndür
-    return NextResponse.json(books);
+    return NextResponse.json(formattedBooks);
   } catch (error) {
     // Hata durumunda loglama yap ve hata yanıtı döndür
     console.error('Kitapları getirme hatası:', error);
@@ -70,6 +140,8 @@ export async function GET() {
       { error: 'Kitaplar getirilirken bir hata oluştu' },
       { status: 500 }
     );
+  } finally {
+    await prismaClient.$disconnect();
   }
 }
 
@@ -180,7 +252,7 @@ export async function POST(request: Request) {
     
     try {
       // Yeni kitabı veritabanına ekle
-      const newBook = await prisma.book.create({
+      const newBook = await prismaClient.book.create({
         data: {
           title,
           author,

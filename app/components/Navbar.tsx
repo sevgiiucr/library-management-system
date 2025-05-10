@@ -2,7 +2,7 @@
 
 import React, { useState, FormEvent, useEffect } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
+import { useRouter, usePathname } from 'next/navigation';
 import { LoginModal, RegisterModal } from './AuthModals';
 
 interface User {
@@ -27,11 +27,17 @@ export default function Navbar() {
   const [user, setUser] = useState<User | null>(null);
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const router = useRouter();
+  const pathname = usePathname();
+
+  const navigation = [
+    { name: 'Tüm Kitaplar', href: '/books' },
+    { name: 'Hakkında', href: '/about' }
+  ];
 
   // Kullanıcı oturum durumunu kontrol et
   useEffect(() => {
     // Client tarafında localStorage'a erişim
-    const token = localStorage.getItem('token');
+    const token = localStorage.getItem('accessToken');
     const userStr = localStorage.getItem('user');
 
     if (token && userStr) {
@@ -46,7 +52,7 @@ export default function Navbar() {
     } else {
       setIsLoggedIn(false);
     }
-  }, []);
+  }, [pathname]); // Pathname değiştiğinde kullanıcı durumunu tekrar kontrol et
 
   // Arama formunun gönderilmesi
   const handleSearch = (e: FormEvent<HTMLFormElement>) => {
@@ -110,8 +116,7 @@ export default function Navbar() {
       left: 0,
       right: 0,
       zIndex: 50,
-      background: 'rgba(0, 0, 0, 0.2)',
-      backdropFilter: 'blur(4px)',
+      background: 'transparent',
       borderBottom: 'none'
     }}>
       <div style={{
@@ -123,7 +128,7 @@ export default function Navbar() {
         alignItems: 'center',
         justifyContent: 'space-between'
       }}>
-        {/* Logo */}
+        {/* Logo - Sol tarafta */}
         <Link href="/" style={{ 
           fontSize: '1.5rem', 
           fontWeight: 'bold',
@@ -133,29 +138,36 @@ export default function Navbar() {
           <i>L&S</i>
         </Link>
         
-        {/* Sağ Menü */}
+        {/* Sağ taraf: Tüm diğer öğeler */}
         <div style={{
           display: 'flex',
-          gap: '1.5rem',
-          alignItems: 'center'
+          alignItems: 'center',
+          gap: '1.5rem'
         }}>
-          <Link href="/books" style={{
-            color: 'rgba(255, 255, 255, 0.8)',
-            textDecoration: 'none',
-            fontSize: '0.875rem',
-            transition: 'color 0.2s'
-          }}>
-              Kitaplar
+          {/* Ana Navigasyon Linkleri */}
+          {navigation.map((item) => (
+            <Link
+              key={item.name}
+              href={item.href}
+              style={{
+                color: 'rgba(255, 255, 255, 0.8)',
+                textDecoration: 'none',
+                fontSize: '0.875rem',
+                transition: 'color 0.2s',
+                padding: '0.5rem 0'
+              }}
+              onMouseOver={(e) => {
+                e.currentTarget.style.color = 'rgba(255, 255, 255, 1)';
+              }}
+              onMouseOut={(e) => {
+                e.currentTarget.style.color = 'rgba(255, 255, 255, 0.8)';
+              }}
+            >
+              {item.name}
             </Link>
-          {/* Categories link kaldırıldı - sayfa henüz mevcut değil */}
-          <Link href="/about" style={{
-            color: 'rgba(255, 255, 255, 0.8)',
-            textDecoration: 'none',
-            fontSize: '0.875rem',
-            transition: 'color 0.2s'
-          }}>
-            Hakkında
-          </Link>
+          ))}
+          
+          {/* Admin Link - Yöneticiler için */}
           {isLoggedIn && user && user.role === 'admin' && (
             <Link href="/admin" style={{
               color: 'rgba(255, 255, 255, 0.8)',
@@ -166,6 +178,8 @@ export default function Navbar() {
               Admin
             </Link>
           )}
+          
+          {/* Profil Dropdown */}
           <div style={{ position: 'relative' }}>
             <button
               onClick={() => setShowDropdown(!showDropdown)}
@@ -274,13 +288,12 @@ export default function Navbar() {
             )}
           </div>
 
-          {/* Arama Formu - En sağda */}
+          {/* Arama Formu */}
           <form 
             onSubmit={handleSearch}
             style={{
               position: 'relative',
-              width: '200px',
-              marginLeft: '1rem'
+              width: '200px'
             }}
           >
             <input

@@ -6,14 +6,14 @@ Kütüphane Yönetim Sistemi, kitapları kategorize etme, ödünç alma/iade etm
 
 ## Teknik Altyapı
 
-- **Frontend**: React, Next.js, TypeScript
-- **Backend**: Node.js, Express
-- **Veritabanı**: MongoDB
-- **State Yönetimi**: Context API (ileride Redux'a geçiş planlanıyor)
-- **Stil**: CSS-in-JS (styled-components), planlanan Tailwind CSS geçişi
-- **API Entegrasyonu**: RESTful API, ileride GraphQL düşünülebilir
+- **Frontend**: React, Next.js 14 (App Router), TypeScript
+- **Backend**: Next.js API Routes (serverless)
+- **Veritabanı**: Microsoft SQL Server (Prisma ORM)
+- **State Yönetimi**: Context API ve Local State
+- **Stil**: Tailwind CSS ve inline CSS
+- **API Entegrasyonu**: RESTful API, Open Library API entegrasyonu
+- **Authentication**: JWT tabanlı özel kimlik doğrulama sistemi
 - **Deployment**: Vercel
-- **CI/CD**: GitHub Actions
 
 ## Proje Takvimi (İki Haftalık Sprintler)
 
@@ -25,28 +25,35 @@ Temel uygulama altyapısının oluşturulması ve kullanıcıların kitapları g
 #### Tamamlanan İşler
 
 **Temel Veri Yapısı ve Modeller**
-- Kitap modeli oluşturulması (id, başlık, yazar, yayın yılı, kategoriler, durumu)
-- Kullanıcı modeli oluşturulması (id, ad, e-posta, şifre, rol)
-- Kategori modeli oluşturulması (id, ad, açıklama)
+- Prisma ile SQL Server veritabanı şeması oluşturuldu:
+  - Book modeli (id, title, author, published, available, imageUrl, description, vb.)
+  - User modeli (id, name, email, password, role, profileImageUrl, vb.)
+  - Category modeli (id, name, description)
+  - Borrow modeli (id, userId, bookId, borrowDate, returnDate)
+  - Favorite modeli (id, userId, bookId, createdAt)
+  - BookCategory modeli (many-to-many ilişki tablosu)
 
 **API Endpoint'leri**
 - `/api/books` - Kitapları listeleme, ekleme
 - `/api/books/:id` - Kitap detayları, güncelleme, silme
 - `/api/categories` - Kategorileri listeleme
-- `/api/users` - Kullanıcı işlemleri
-- `/api/auth` - Kimlik doğrulama
+- `/api/auth/login` - Kullanıcı girişi ve token oluşturma
+- `/api/auth/register` - Kullanıcı kaydı
+- `/api/auth/me` - Mevcut kullanıcı bilgilerini getirme
+- `/api/auth/refresh-token` - Token yenileme
 
 **Ana Sayfa Tasarımı**
-- Next.js proje yapısının oluşturulması
-- Layout bileşeni tasarımı (Header, Footer, Main)
+- Video arka planlı, animasyonlu giriş sayfası
+- Modern ve temiz UI tasarımı
+- Responsive layout entegrasyonu
 - Kitap kartları bileşeni tasarımı
 - Kitap detay sayfası (temel bilgiler)
-- Duyarlı grid sistemi temelleri
 
 **Kategori Sistemi**
 - Kategori filtreleme UI bileşenleri
 - Kategori bazlı kitap filtreleme mantığı
 - API ile kategori verilerinin alınması ve işlenmesi
+- Çoka-çok (many-to-many) ilişki yapısı
 
 **Arama Fonksiyonu**
 - Arama kutusu UI bileşeni
@@ -55,21 +62,21 @@ Temel uygulama altyapısının oluşturulması ve kullanıcıların kitapları g
 - Arama sonuçlarının gösterilmesi
 
 **Kullanıcı Kayıt ve Giriş**
-- Kayıt formu UI bileşeni
-- Giriş formu UI bileşeni
-- Temel form validasyonu
-- JWT token altyapısı
+- Modal tabanlı kayıt ve giriş formları
+- Form validasyonları
+- JWT token ile güvenli kimlik doğrulama
+- Refresh token mekanizması
 
-#### Yapılacak İşler
-- Veri tabanı bağlantı havuzu optimizasyonu
-- N+1 sorgu problemlerinin giderilmesi
-- İlişkisel verilerin daha verimli yüklenmesi için veri çekme stratejileri
+#### Uygulanan Optimizasyonlar
+- Prisma connection pooling
+- Next.js'in optimizasyon özellikleri
+- Giriş çıkış ve form işlemleri sonrası otomatik yönlendirmeler
 
 #### Kabul Kriterleri
-- Kullanıcılar kitap listesini görüntüleyebilmeli
-- Filtreleme ve arama fonksiyonları çalışmalı
-- Kullanıcı kayıt ve giriş işlemleri tamamlanmalı
-- Temel API endpoint'leri çalışır durumda olmalı
+- ✅ Kullanıcılar kitap listesini görüntüleyebilmeli
+- ✅ Filtreleme ve arama fonksiyonları çalışmalı
+- ✅ Kullanıcı kayıt ve giriş işlemleri tamamlanmalı
+- ✅ Temel API endpoint'leri çalışır durumda olmalı
 
 ---
 
@@ -83,186 +90,128 @@ Kullanıcıların kitaplarla etkileşimde bulunabileceği özellikler ve kişise
 **Favoriler Sistemi**
 - Favori ekleme/kaldırma API endpoint'leri
   - `POST /api/favorites` - Favori ekleme
-  - `DELETE /api/favorites/:id` - Favori kaldırma
+  - `DELETE /api/favorites/:id` - Favori kaldırma 
   - `GET /api/favorites` - Kullanıcı favorilerini listeleme
-- Favori butonları ve durum göstergeleri UI
-- Favori durumu için optimistik UI güncellemeleri
-- LocalStorage ile çevrimdışı favori desteği
-- Favoriler sayfası oluşturulması
+- Kalp ikonlu favori butonları ve durum göstergeleri
+- Token bazlı yetkilendirme
+- Kitap detay sayfası ve liste sayfasında favori işaretleme
+- Hata yakalama ve kullanıcı bildirimleri
 
 **Ödünç Alma/İade Sistemi**
 - Ödünç alma/iade API endpoint'leri
-  - `PATCH /api/books/:id` - Kitap durumu güncelleme
-  - `GET /api/borrows` - Ödünç alınan kitapları listeleme
   - `POST /api/borrows` - Ödünç alma kaydı oluşturma
-- Ödünç alma/iade butonları UI
-- Kitap durumu göstergeleri
-- Ödünç alınan kitapların takibi
-- Kitap kartında mevcut durum gösterimi
+  - `PUT /api/borrows/:id` - İade işlemi (returnDate güncelleme)
+  - `GET /api/borrows` - Tüm ödünç kayıtlarını listeleme
+  - `GET /api/borrows/active` - Aktif ödünç kayıtlarını listeleme
+- İşlemler için özel butonlar ve UI
+- Kitap durumu (available) göstergeleri
+- Kullanıcı dashboard'unda ödünç takibi
 
 **Dashboard Geliştirmeleri**
-- Dashboard ana sayfa tasarımı
-- Kullanıcı profil bilgileri gösterimi
-- Ödünç alınan kitaplar bölümü
-- Favori kitaplar bölümü
-- Profil fotoğrafı yükleme fonksiyonu
-- Kullanıcı ayarları bölümü
-- Okuma istatistikleri (basit versiyon)
+- Modern dashboard tasarımı
+- Kullanıcı profil bilgileri ve fotoğrafı
+- Ödünç alınan kitaplar listesi
+- Favori kitaplar listesi
+- Profil fotoğrafı yükleme ve güncelleme
+- Base64 formatında görsel işleme
+- Kullanıcıya özel istatistikler
 
-**Admin Panel Temelleri**
-- Admin rolüne göre yetkilendirme sistemi
-- Kitap ekleme/düzenleme/silme formları
-- Kullanıcı yönetimi (basit liste)
-- Ödünç alım kayıtları raporları
-- Temel istatistikler dashboard'u
+**Admin Panel Özellikleri**
+- Rol tabanlı erişim kontrolü
+- Yönetici dashboard'u
+- Kitap ekleme/düzenleme/silme UI
+- Kullanıcı yönetimi (liste görünümü)
+- Ödünç işlemleri yönetimi
+- İstatistik raporları
 
 **UI İyileştirmeleri**
-- Hover efektleri ve animasyonlar
-  - Kitap kartları için scale efekti (1.03)
-  - Butonlar için hover durumunda renk değişimi
-  - Kategori etiketleri için hover efektleri
-- "Tüm Kitaplar" başlığı için mistik tasarım
-  - Cinzel fontu entegrasyonu
-  - Mor-mavi gradient renk efekti
-  - Işıldama animasyonu (glow)
-  - Fade-in animasyonu
-- Butonlar için hover animasyonları
-  - Border-radius değişimi (0.5rem -> 0.7rem)
-  - Ölçek büyütme (scale 1.05)
-  - Arkaplan renk geçişleri
+- Kitap kartları için hover animasyonları
+- Butonlar için durum bazlı stil değişimleri
+- Sayfa geçişlerinde animasyonlar
+- Modal ve popup bileşenleri
+- Durum mesajları
+- Gece modu desteği (dark/light tema)
 
 **Bildirim Sistemi**
-- Popup bildirim bileşeni oluşturma
-- Bildirim durumları (başarı, hata, bilgi)
-- Otomatik kaybolma mekanizması (3 saniye)
-- İşlem sonuçları için bildirim entegrasyonu
-- ARIA uyumlu bildirim yapısı
+- İşlem sonuçlarını gösteren durum bildirimleri
+- Hata ve başarı mesajları
+- Otomatik kaybolma özelliği
+- Kullanıcı dostu mesajlar
 
-**Erişilebilirlik İyileştirmeleri**
-- Tüm etkileşimli öğeler için ARIA etiketleri
-  - Butonlar için aria-label'lar
-  - Bildirimler için role="alert"
-  - Formlar için gerekli erişilebilirlik özellikleri
-- Ekran okuyucu testleri ve iyileştirmeler
-- Klavye navigasyonu temel destekleri
-
-**Responsive Tasarım Çalışmaları**
-- Kitap kartları grid sistemi optimizasyonu
-  - 280px'den 250px'e minimum kart genişliği değişimi
-  - Kartlar arası boşluğun azaltılması (2rem -> 1rem)
-- Esnek yükseklik tanımı (sabit yerine min-height)
-- Mobil görünüm için ilk düzenlemeler
-
-#### Yapılacak İşler
-- Kitap detayları sayfasında gösterilecek ek bilgiler ve etkileşimler
-- Yorum sistemi taslağı
-- Admin paneli için daha detaylı raporlar
-- Küçük UI hataları ve tutarsızlıkları düzeltme
+**Open Library API Entegrasyonu**
+- Harici kitap verileri çekme
+- Kitap kapak görselleri entegrasyonu
+- Zengin kitap meta verileri
+- Arama ve içe aktarma özellikleri
 
 #### Kabul Kriterleri
-- Kullanıcılar kitapları favorilere ekleyip çıkarabilmeli
-- Kitap ödünç alma ve iade işlemleri çalışmalı
-- Kullanıcı dashboard'u tüm gerekli bilgileri göstermeli
-- Admin panel temel işlevleri yerine getirmeli
-- Bildirim sistemi tüm kullanıcı işlemlerinde çalışmalı
+- ✅ Kullanıcılar kitapları favorilere ekleyip çıkarabilmeli
+- ✅ Kitap ödünç alma ve iade işlemleri çalışmalı
+- ✅ Kullanıcı dashboard'u gerekli bilgileri göstermeli
+- ✅ Admin panel yetkili kullanıcılar için erişilebilir olmalı
+- ✅ Open Library API entegrasyonu çalışmalı
 
 ---
 
-### Sprint 3: Responsive Tasarım ve Erişilebilirlik (29 Nisan - 12 Mayıs)
+### Sprint 3: Responsive Tasarım ve Performans Optimizasyonu (29 Nisan - 12 Mayıs)
 
 #### Sprint Hedefi
-Uygulamanın tüm cihazlarda doğru görüntülenmesi ve erişilebilirlik standartlarına uyumlu hale getirilmesi.
+Uygulamanın tüm cihazlarda doğru görüntülenmesi ve performans optimizasyonlarının yapılması.
 
-#### Teknik Gereksinimler
-- Tüm bileşenlerin responsive davranışlarının tanımlanması
-- Media query'lerin sistematik yapısı (breakpoint'ler: 480px, 768px, 1024px, 1280px)
-- WCAG 2.1 AA standartlarına uygunluk
-- Performans optimizasyonları için kod tabanı gözden geçirmesi
-
-#### Yapılacak İşler
+#### Tamamlanan İşler
 
 **Tam Responsive Tasarım Uygulaması**
 - **Mobil Cihazlar (< 480px)**
-  - Tek sütunlu grid layout
-  - Touch-optimized butonlar (minimum 44x44px dokunma alanı)
-  - Fontların küçültülmesi ve element boyutlarının yeniden düzenlenmesi
-  - Menü için hamburger icon ve drawer implementasyonu
+  - Tek sütunlu kitap kartları grid sistemi
+  - Touch-uyumlu butonlar ve kontroller
+  - Font boyutları optimizasyonu
+  - Daraltılmış menü yapısı
 
 - **Tablet Cihazlar (480px - 1024px)**
-  - 2 veya 3 sütunlu grid layout
-  - Touch ve mouse kullanıcıları için optimize edilmiş UI elementleri
-  - Sidebar bileşeninin responsive davranışı
-  - Kategori filtreleme sisteminin yatay scrollable tasarımı
+  - 2-3 sütunlu grid layout
+  - Tablet için optimize edilmiş UI
+  - Duyarlı görsel boyutları
+  - Kullanıcı dostu form boyutlandırması
 
 - **Desktop (> 1024px)**
   - 4+ sütunlu grid layout
-  - Hover durumunda daha zengin efektler
-  - Sidebar kullanımının tam entegrasyonu
-  - Gelişmiş tablo görünümleri ve veri gösterimi
-
-- **Dinamik Grid ve Layout Ayarları**
-  - CSS Grid ve Flexbox kombinasyonu
-  - Container sorguları (container queries) kullanımı
-  - Otomatik boyutlandırma ve hizalama (auto-fit, minmax)
-  - Kullanıcı tercihlerine göre düzenlenebilir grid seçenekleri
-
-- **Touch-Friendly UI Elementleri**
-  - Kaydırılabilir listeler için momentum scrolling
-  - Swipe hareketleri için destek (sayfalar arası geçiş, kartlar)
-  - Dokunma hedeflerinin genişletilmesi
-  - Dokunma geri bildirimleri (haptic feedback API incelemesi)
-
-**Erişilebilirlik Geliştirmeleri**
-- **Tam Klavye Navigasyonu**
-  - Tab index düzeni optimizasyonu
-  - Focus yönetimi ve görsel belirteçler
-  - Keyboard trap'lerin önlenmesi
-  - Klavye kısayolları implementasyonu
-
-- **ARIA İyileştirmeleri**
-  - landmark rolleri (main, nav, header, footer, etc.)
-  - aria-live bölgeleri için politikalar
-  - aria-expanded, aria-hidden, aria-controls kullanımları
-  - Form alanları için doğru etiketleme
-
-- **Renk Kontrastı ve Görsel Hiyerarşi**
-  - Minimum 4.5:1 kontrast oranı sağlanması
-  - Renk körü modları için özel temalar
-  - İkonlar için alternatif metin
-  - Tema renkleri için CSS değişkenleri
-
-- **Erişilebilir Formlar**
-  - Form validasyonunun erişilebilir hale getirilmesi
-  - Hata mesajlarının screen reader uyumluluğu
-  - Input elemanlarının doğru şekilde etiketlenmesi
-  - Form grupları için uygun ARIA tanımları
+  - Zengin hover efektleri
+  - Geniş ekran optimizasyonu
+  - Detaylı kitap ve kullanıcı bilgileri
 
 **Performans İyileştirmeleri**
-- **Lazy Loading**
-  - Görüntüler için native lazy loading
-  - Bileşenler için React.lazy ve Suspense kullanımı
-  - İçerik için virtual scrolling implementasyonu
-  - Data fetching optimizasyonu
+- Image optimizasyonu (Next.js Image komponenti)
+- Token yenileme mekanizması
+- Veritabanı sorgu optimizasyonları
+- Önbelleğe alma stratejileri
+- Lazy loading uygulamaları
 
-- **Code-Splitting**
-  - Sayfa bazlı bölünme
-  - Dinamik import'lar
-  - Vendor chunk optimizasyonu
-  - Webpack bundle analizi ve optimizasyonu
+**Erişilebilirlik Geliştirmeleri**
+- Semantik HTML yapısı
+- ARIA etiketleri ve rol tanımlamaları
+- Klavye navigasyonu desteği
+- Renk kontrastı iyileştirmeleri
+- Ekran okuyucu uyumluluğu
 
-- **Resim Optimizasyonu**
-  - WebP formatı kullanımı
-  - Responsive image srcset ve size kullanımı
-  - Next.js Image bileşeni optimizasyonları
-  - Placeholder/blur-up tekniği
+**Güvenlik İyileştirmeleri**
+- JWT token güvenliği
+- HTTP-only cookie kullanımı
+- Input validasyonları
+- XSS koruması
+- CSRF önlemleri
+
+**Son Dokunuşlar**
+- Dokümantasyon güncellemeleri
+- Kod temizliği ve refactoring
+- Edge-case hata kontrolü
+- Ek kullanıcı deneyimi iyileştirmeleri
 
 #### Kabul Kriterleri
-- Uygulama tüm ekran boyutlarında (320px'den 1920px'e kadar) düzgün görüntülenmeli
-- Lighthouse Accessibility skoru minimum 90 olmalı
-- WCAG 2.1 AA kurallarını karşılamalı
-- Lighthouse Performance skoru minimum 85 olmalı
-- Tam klavye navigasyonu tüm fonksiyonları erişilebilir kılmalı
-- Ekran okuyucular tüm içeriği doğru şekilde seslendirebilmeli
+- ✅ Uygulama tüm ekran boyutlarında düzgün çalışmalı
+- ✅ Performans metrikleri kabul edilebilir seviyelerde olmalı
+- ✅ WCAG erişilebilirlik standartları karşılanmalı
+- ✅ Güvenlik testleri başarıyla geçilmeli
+- ✅ Kod kalitesi ve dokümantasyon standartları karşılanmalı
 
 ---
 

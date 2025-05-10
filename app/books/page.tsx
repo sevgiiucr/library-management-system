@@ -1,10 +1,11 @@
 'use client';
 
-import React, { useState, useEffect, Suspense } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useRouter, usePathname, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import Navbar from '../components/Navbar';
 import Image from 'next/image';
+import { FaSearch, FaHeart, FaRegHeart } from 'react-icons/fa';
 
 interface Book {
   id: string;
@@ -18,7 +19,7 @@ interface Book {
   categories: string[];
 }
 
-// Kategorileri tanımla - Bu artık veritabanından gelecek
+// Kategorileri tanımla
 const defaultCategories = [
   { id: 'all', name: 'Tüm Kitaplar' },
   { id: 'fiction', name: 'Kurgu' },
@@ -29,7 +30,7 @@ const defaultCategories = [
   { id: 'history', name: 'Tarih' }
 ];
 
-// Global stillerimizi en üstte tanımlayalım
+// Global stillerimizi tanımlayalım
 function GlobalStyles() {
   return (
     <style jsx global>{`
@@ -80,29 +81,37 @@ function GlobalStyles() {
   );
 }
 
-// SearchParams hook'unu ayrı bir bileşene çıkaralım
-function BooksContent() {
+// JWT'den userId çekmek için yardımcı fonksiyon
+function getUserIdFromToken(token: string | null): string | null {
+  if (!token) return null;
+  try {
+    const payload = JSON.parse(atob(token.split('.')[1]));
+    return payload.userId;
+  } catch {
+    return null;
+  }
+}
+
+export default function BooksPage() {
+  const router = useRouter();
+  const pathname = usePathname();
   const searchParams = useSearchParams();
   const urlSearchTerm = searchParams.get('search') || '';
   const urlCategory = searchParams.get('category') || 'all';
 
   const [books, setBooks] = useState<Book[]>([]);
-  const [loading, setLoading] = useState<boolean>(true);
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [searchTerm, setSearchTerm] = useState<string>(urlSearchTerm);
-  const [selectedCategory, setSelectedCategory] = useState<string>(urlCategory);
+  const [searchTerm, setSearchTerm] = useState(urlSearchTerm);
+  const [selectedCategories, setSelectedCategories] = useState<string[]>([urlCategory]);
   const [userToken, setUserToken] = useState<string | null>(null);
-  const [favorites, setFavorites] = useState<string[]>([]);
   const [categories, setCategories] = useState([...defaultCategories]);
-  const [notification, setNotification] = useState<{message: string, type: 'success' | 'error' | 'info' | null}>({message: '', type: null});
-  const router = useRouter();
-  const pathname = usePathname();
 
-  // Bildirim gösterme fonksiyonu
-  const showNotification = (message: string, type: 'success' | 'error' | 'info') => {
-    setNotification({ message, type });
-    setTimeout(() => setNotification({message: '', type: null}), 3000); // 3 saniye sonra kaybolacak
-  };
+  // Kullanıcı token'ını al
+  useEffect(() => {
+    const token = localStorage.getItem('accessToken');
+    setUserToken(token);
+  }, []);
 
   // Kategorileri getir
   useEffect(() => {
@@ -111,8 +120,6 @@ function BooksContent() {
         const response = await fetch('/api/categories');
         if (response.ok) {
           const data = await response.json();
-          
-          // Veri API'dan geliyor, "all" kategorisini ekle ve set et
           const categoriesWithAll = [
             { id: 'all', name: 'Tüm Kitaplar' },
             ...data.map((cat: any) => ({
@@ -120,167 +127,72 @@ function BooksContent() {
               name: cat.name
             }))
           ];
-          
           setCategories(categoriesWithAll);
         }
       } catch (err) {
         console.error('Kategori getirme hatası:', err);
-        // Hata durumunda default kategorileri kullan
       }
     };
     
     fetchCategories();
   }, []);
 
-  // Kullanıcının token'ını localStorage'dan al
+  // Kitapları getir
   useEffect(() => {
-    const token = localStorage.getItem('accessToken');
-    setUserToken(token);
-    
-    // Sayfa yüklendiğinde localStorage'dan geçici favorileri yükle
-    try {
-      const storedFavorites = JSON.parse(localStorage.getItem('favorites') || '[]');
-      if (Array.isArray(storedFavorites) && storedFavorites.length > 0) {
-        console.log("LocalStorage'dan favoriler yükleniyor:", storedFavorites);
-        setFavorites(storedFavorites);
-      }
-    } catch (err) {
-      console.error("LocalStorage'dan favorileri yükleme hatası:", err);
-    }
-  }, []);
-
-  useEffect(() => {
-    // URL'den arama parametresi değiştiğinde searchTerm'i güncelle
-    setSearchTerm(urlSearchTerm);
-    // URL'den kategori parametresi değiştiğinde selectedCategory'i güncelle
-    setSelectedCategory(urlCategory);
-  }, [urlSearchTerm, urlCategory]);
-
-  // Token yenileme fonksiyonu
-  const refreshTokenIfNeeded = async () => {
-    try {
-      const response = await fetch('/api/auth/refresh-token', {
-        method: 'POST',
-        credentials: 'include' // Cookie'leri dahil et
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        // Yeni access token'ı localStorage'da sakla
-        localStorage.setItem('accessToken', data.accessToken);
-        setUserToken(data.accessToken);
-        return data.accessToken;
-      } else {
-        // Token yenilenemezse, oturumu sonlandır
-        localStorage.removeItem('accessToken');
-        localStorage.removeItem('user');
-        router.push('/login');
-        return null;
-      }
-    } catch (error) {
-      console.error('Token yenilenirken hata:', error);
-      localStorage.removeItem('accessToken');
-      localStorage.removeItem('user');
-      router.push('/login');
-      return null;
-    }
-  };
-
-  // API istekleri için yardımcı fonksiyon
-  const fetchWithTokenRefresh = async (url: string, options: RequestInit = {}) => {
-    let token = userToken;
-    
-    // İlk deneme
-    const response = await fetch(url, {
-      ...options,
-      headers: {
-        ...options.headers,
-        'Authorization': token ? `Bearer ${token}` : '',
-        'Content-Type': 'application/json'
-      }
-    });
-
-    // 401 hatası alırsak (token geçersiz), token'ı yenile ve tekrar dene
-    if (response.status === 401 && token) {
-      const newToken = await refreshTokenIfNeeded();
-      if (!newToken) return null;
-
-      // Yenilenen token ile tekrar dene
-      return fetch(url, {
-        ...options,
-        headers: {
-          ...options.headers,
-          'Authorization': `Bearer ${newToken}`,
-          'Content-Type': 'application/json'
-        }
-      });
-    }
-
-    return response;
-  };
-
-  // Favori kitapları getir
-  useEffect(() => {
-    const fetchFavorites = async () => {
-      if (!userToken) {
-        console.log("Favori getirme: Token yok, favoriler yüklenemiyor");
-        return;
-      }
-      
-      console.log("Favori kitapları getirme işlemi başlatılıyor");
-      
+    const fetchBooks = async () => {
       try {
-        const response = await fetchWithTokenRefresh('/api/favorites');
-        
-        if (!response) {
-          fetchBooks([]); // Token yenileme başarısız, kitapları favorsiz yükle
-          return;
+        setLoading(true);
+        // Sadece veritabanındaki kitapları getir
+        const response = await fetch('/api/books');
+        if (!response.ok) {
+          throw new Error('Kitaplar yüklenirken bir hata oluştu');
         }
-        
-        console.log("Favori getirme yanıtı:", response.status);
-        
-        if (response.ok) {
-          const favoriteBooks = await response.json();
-          console.log("Favori kitaplar (API yanıtı):", favoriteBooks);
-          
-          if (!Array.isArray(favoriteBooks)) {
-            console.error("Favori kitaplar array değil:", favoriteBooks);
-            fetchBooks([]);
-            return;
-          }
-          
-          // Kitapları API'den çekerken kullanabileceğimiz favori IDs'lerini saklayalım
-          // Bu favorileBooks fav.id değeri, silme işlemi için kullanılacak
-          const bookIdsInFavorites = favoriteBooks.map(fav => fav.bookId);
-          console.log("Favori kitap ID'leri:", bookIdsInFavorites);
-          setFavorites(bookIdsInFavorites);
-          
-          // Kitapları yükle
-          fetchBooks(favoriteBooks);
-        } else {
-          console.error("Favori getirme hatası:", await response.text());
-          // Hata durumunda da kitapları yükle
-          fetchBooks([]);
-        }
-      } catch (err) {
-        console.error('Favori kitapları getirme hatası:', err);
-        // Hata durumunda da kitapları yükle
-        fetchBooks([]);
+        const data = await response.json();
+        setBooks(data);
+      } catch (err: any) {
+        console.error('Kitap yükleme hatası:', err);
+        setError(err.message);
+      } finally {
+        setLoading(false);
       }
     };
 
-    if (userToken) {
-      fetchFavorites();
-    } else {
-      // Token yoksa favorisiz kitapları yükle
-      console.log("Token olmadığı için favorisiz kitaplar yükleniyor");
-      fetchBooks([]);
-    }
+    fetchBooks();
+  }, []);
+
+  // Favori durumunu kontrol et
+  useEffect(() => {
+    const fetchFavorites = async () => {
+      if (!userToken) return;
+
+      try {
+        const response = await fetch('/api/favorites', {
+          headers: {
+            'Authorization': `Bearer ${userToken}`
+          }
+        });
+
+        if (!response.ok) return;
+
+        const favorites = await response.json();
+        setBooks(prevBooks => prevBooks.map(book => {
+          const favorite = favorites.find((f: any) => f.bookId === book.id);
+          return {
+            ...book,
+            isFavorite: !!favorite,
+            favoriteId: favorite?.id
+          };
+        }));
+      } catch (err) {
+        console.error('Favoriler yüklenirken hata:', err);
+      }
+    };
+
+    fetchFavorites();
   }, [userToken]);
 
-  // Kategori değiştirme işlemi
+  // Kategori değiştirme
   const handleCategoryChange = (categoryId: string) => {
-    // URL parametrelerini güncelle (kategori ve arama)
     const params = new URLSearchParams(searchParams.toString());
     
     if (categoryId === 'all') {
@@ -297,338 +209,138 @@ function BooksContent() {
     
     const newUrl = `${pathname}?${params.toString()}`;
     router.push(newUrl);
-    
-    setSelectedCategory(categoryId);
+    setSelectedCategories([categoryId]);
   };
 
-  // Kitapları getir
-  const fetchBooks = async (favoriteBooks: any[]) => {
-    try {
-      setLoading(true);
-      // API'ye bağlanmayı dene
-      const response = await fetch('/api/books').catch(() => null);
-      
-      if (response && response.ok) {
-        const data = await response.json();
-        
-        // Favori durumunu ekle
-        const bookIdsInFavorites = favoriteBooks.map((fav: any) => fav.bookId);
-        const booksWithFavorites = data.map((book: Book) => {
-          // Kitabın favorilerde olup olmadığını kontrol et
-          const isFavorite = bookIdsInFavorites.includes(book.id);
-          // Eğer favorideyse, favoriteId'yi (silme için gereken ID) bul
-          const favoriteId = isFavorite ? 
-            favoriteBooks.find((fav: any) => fav.bookId === book.id)?.id : 
-            undefined;
-          
-          // Kitaplara rastgele kategoriler atayalım
-          // Gerçek bir uygulamada bu API'den gelir
-          const bookCategories = getRandomCategories();
-          
-          return {
-          ...book,
-            isFavorite,
-            favoriteId,
-            categories: bookCategories
-          };
-        });
-        
-        console.log("Favori durumları eklenmiş kitaplar:", booksWithFavorites);
-        setBooks(booksWithFavorites);
-        setError(null);
-      } else {
-        // API çalışmıyorsa hata mesajı göster
-        console.log('API yanıt vermedi veya hata oluştu');
-        setBooks([]);
-        setError('Kitap verileri şu anda yüklenemiyor. Lütfen daha sonra tekrar deneyin.');
-      }
-    } catch (err) {
-      console.error('Kitap çekme hatası:', err);
-      setError('Kitaplar yüklenirken bir hata oluştu. Lütfen daha sonra tekrar deneyin.');
-      setBooks([]);
-    } finally {
-      setLoading(false);
-    }
-  };
-  
-  // Rastgele kategoriler atar (gerçek uygulamada API'den gelecektir)
-  const getRandomCategories = () => {
-    const categoryIds = categories.slice(1).map(cat => cat.id); // 'all' hariç
-    const numCategories = Math.floor(Math.random() * 3) + 1; // 1-3 arası kategori
-    const shuffled = [...categoryIds].sort(() => 0.5 - Math.random());
-    return shuffled.slice(0, numCategories);
-  };
-
-  // Kitapları filtrele
-  const filteredBooks = books.filter(book => {
-    // Arama filtresi
-    const matchesSearch = searchTerm ? 
-      (book.title.toLowerCase().includes(searchTerm.toLowerCase()) || 
-       book.author.toLowerCase().includes(searchTerm.toLowerCase())) : 
-      true;
-    
-    // Kategori filtresi
-    const matchesCategory = selectedCategory === 'all' ? 
-      true : 
-      book.categories.includes(selectedCategory);
-    
-    return matchesSearch && matchesCategory;
-  });
-
-  // Favori ekle/kaldır
-  const handleToggleFavorite = async (event: React.MouseEvent, bookId: string) => {
-    event.stopPropagation(); // Kitap kartına tıklamayı engelle
-    event.preventDefault(); // Sayfa yönlendirmesini engelle
-    
-    console.log("Favori işlemi başlatılıyor, bookId:", bookId);
-    
-    if (!userToken) {
-      // Kullanıcı giriş yapmamışsa login sayfasına yönlendir
-      console.log("Kullanıcı giriş yapmamış, login sayfasına yönlendiriliyor");
-      router.push('/login');
-      return;
-    }
-    
-    // Token kontrol
-    console.log("Token durumu:", userToken ? "Var" : "Yok");
-    
-    try {
-      const book = books.find(b => b.id === bookId);
-      if (!book) {
-        console.error("Kitap bulunamadı!");
-        return;
-      }
-      
-      console.log("İşlem yapılacak kitap:", book);
-      
-      if (book.isFavorite) {
-        // Favorilerinizden kaldırma işlemi
-        const favoriteId = book.favoriteId;
-        console.log("Kaldırılacak favori ID:", favoriteId);
-        
-        if (!favoriteId) {
-          console.error("Favori ID bulunamadı!");
-          return;
-        }
-        
-        console.log(`DELETE isteği gönderiliyor: /api/favorites/${favoriteId}`);
-        const response = await fetch(`/api/favorites/${favoriteId}`, {
-          method: 'DELETE',
-          headers: {
-            'Authorization': `Bearer ${userToken}`
-          }
-        });
-        
-        console.log("Favori kaldırma yanıtı:", response.status);
-        const responseText = await response.text();
-        console.log("Yanıt içeriği:", responseText);
-        
-        let responseData;
-        try {
-          if (responseText) {
-            responseData = JSON.parse(responseText);
-          }
-        } catch (e) {
-          console.error("JSON parse hatası:", e);
-        }
-        
-        if (response.ok) {
-          // Favorilerden kaldırıldı, state'i güncelle
-          setFavorites(prevFavorites => prevFavorites.filter(id => id !== bookId));
-          setBooks(prevBooks => prevBooks.map(b => 
-            b.id === bookId ? { ...b, isFavorite: false, favoriteId: undefined } : b
-          ));
-          
-          // Başarı bildirimi göster
-          showNotification(`Kitap favorilerden kaldırıldı`, 'success');
-          
-          // localStorage'a favori durumunu kaydet
-          try {
-            const storedFavorites = JSON.parse(localStorage.getItem('favorites') || '[]');
-            const updatedFavorites = storedFavorites.filter((id: string) => id !== bookId);
-            localStorage.setItem('favorites', JSON.stringify(updatedFavorites));
-          } catch (err) {
-            console.error("Favorileri localStorage'a kaydetme hatası:", err);
-          }
-        } else {
-          console.error("Favori kaldırma hatası:", responseData?.error || responseText);
-        }
-      } else {
-        // Favorilere ekle
-        console.log("POST isteği gönderiliyor: /api/favorites");
-        const response = await fetch('/api/favorites', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${userToken}`
-          },
-          body: JSON.stringify({ bookId })
-        });
-        
-        console.log("Favori ekleme yanıtı:", response.status);
-        const responseText = await response.text();
-        console.log("Yanıt içeriği:", responseText);
-        
-        let responseData;
-        try {
-          if (responseText) {
-            responseData = JSON.parse(responseText);
-          }
-        } catch (e) {
-          console.error("JSON parse hatası:", e);
-        }
-        
-        // Başarı veya zaten favorilerde durumu
-        if (response.ok || response.status === 409) {
-          // API'den gelen ID'yi alıyoruz (ya yeni oluşturulmuş ID ya da zaten varsa olan ID)
-          let favoriteId = undefined;
-          
-          if (responseData) {
-            favoriteId = responseData.id;
-          }
-          
-          console.log("Favori ID:", favoriteId);
-          
-          // Favorilere eklendi, state'i güncelle
-          setFavorites(prevFavorites => [...prevFavorites, bookId]);
-          setBooks(prevBooks => prevBooks.map(b => 
-            b.id === bookId ? { ...b, isFavorite: true, favoriteId } : b
-          ));
-          
-          // Başarı bildirimi göster
-          showNotification(`Kitap favorilere eklendi`, 'success');
-          
-          // localStorage'a favori durumunu kaydet
-          try {
-            const storedFavorites = JSON.parse(localStorage.getItem('favorites') || '[]');
-            if (!storedFavorites.includes(bookId)) {
-              storedFavorites.push(bookId);
-              localStorage.setItem('favorites', JSON.stringify(storedFavorites));
-            }
-          } catch (err) {
-            console.error("Favorileri localStorage'a kaydetme hatası:", err);
-          }
-        } else {
-          console.error("Favori ekleme hatası:", responseData?.error || responseText);
-        }
-      }
-    } catch (err) {
-      console.error('Favori işlemi hatası:', err);
-    }
-  };
-
-  // Yerel aramayı yönet
+  // Arama işlemi
   const handleSearch = (e: React.ChangeEvent<HTMLInputElement>) => {
     const value = e.target.value;
     setSearchTerm(value);
     
-    // URL'yi güncelle ama sadece searchTerm değeri varsa
+    const params = new URLSearchParams(searchParams.toString());
     if (value.trim()) {
-      // URL'yi güncelle ama sayfayı yeniden yükleme
-      router.replace(`${pathname}?search=${encodeURIComponent(value)}`, { scroll: false });
+      params.set('search', value);
     } else {
-      // Arama terimi boşsa URL'den parametre kaldır
-      router.replace(pathname, { scroll: false });
+      params.delete('search');
+    }
+    
+    if (selectedCategories.length > 0) {
+      params.set('category', selectedCategories[0]);
+    }
+    
+    router.replace(`${pathname}?${params.toString()}`, { scroll: false });
+  };
+
+  // Favori ekle/kaldır
+  const handleToggleFavorite = async (event: React.MouseEvent, bookId: string) => {
+    event.stopPropagation();
+    
+    // Token'ı doğrudan localStorage'dan al
+    const token = localStorage.getItem('accessToken');
+    if (!token) {
+      // Giriş modalını aç
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('openLoginModal'));
+      }
+      return;
+    }
+
+    const book = books.find(b => b.id === bookId);
+    if (!book) return;
+
+    try {
+      if (book.isFavorite && book.favoriteId) {
+        const response = await fetch(`/api/favorites/${book.favoriteId}`, {
+          method: 'DELETE',
+          headers: {
+            'Authorization': `Bearer ${token}`
+          }
+        });
+
+        if (response.ok) {
+          setBooks(books.map(b => 
+            b.id === bookId ? { ...b, isFavorite: false, favoriteId: undefined } : b
+          ));
+        }
+      } else {
+        const response = await fetch('/api/favorites', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          },
+          body: JSON.stringify({ bookId })
+        });
+
+        if (response.ok) {
+          const data = await response.json();
+          setBooks(books.map(b => 
+            b.id === bookId ? { ...b, isFavorite: true, favoriteId: data.id } : b
+          ));
+        }
+      }
+    } catch (error) {
+      console.error("Favori işlemi hatası:", error);
     }
   };
 
-  // İade veya ödünç alma işlemi
-  const handleReturnBook = async (event: React.MouseEvent, bookId: string) => {
-    event.stopPropagation(); // Kitap kartına tıklamayı engelle
-    event.preventDefault(); // Sayfa yönlendirmesini engelle
+  // Kitabı ödünç al/iade et
+  const handleBorrowBook = async (event: React.MouseEvent, bookId: string) => {
+    event.stopPropagation();
     
-    if (!userToken) {
-      // Kullanıcı giriş yapmamışsa login sayfasına yönlendir
-      router.push('/login');
+    const token = localStorage.getItem('accessToken');
+    if (!token) {
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('openLoginModal'));
+      }
       return;
     }
-    
+
+    const userId = getUserIdFromToken(token);
+    const book = books.find(b => b.id === bookId);
+    if (!book || !userId) return;
+
     try {
-      // Kullanıcı bilgilerini localStorage'dan al
-      const userStr = localStorage.getItem('user');
-      if (!userStr) {
-        router.push('/login');
-        return;
-      }
-      
-      const user = JSON.parse(userStr);
-      const userId = user.id;
-      
-      if (!userId) {
-        router.push('/login');
-        return;
-      }
-      
-      // Kitabı bul
-      const book = books.find(b => b.id === bookId);
-      if (!book) return; // Kitap bulunamadıysa işlem yapma
-      
-      const action = book.available ? 'borrow' : 'return';
-      
-      // İade veya ödünç alma işlemi için API çağrısı
-      const response = await fetchWithTokenRefresh(`/api/books/${bookId}`, {
+      const response = await fetch(`/api/books/${bookId}`, {
         method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
         body: JSON.stringify({
-          action: action,
-          userId: userId  // Kullanıcı ID'sini gönder
-        }),
+          action: book.available ? 'borrow' : 'return',
+          userId
+        })
       });
-      
-      if (!response) {
-        showNotification('İşlem sırasında kimlik doğrulama hatası oluştu', 'error');
-        return;
-      }
-      
+
       if (response.ok) {
-        // Kitap durumunu güncelle
-        const updatedBook = !book.available;
         setBooks(books.map(b => 
           b.id === bookId ? { ...b, available: !b.available } : b
         ));
-        
-        // Başarı bildirimi göster
-        showNotification(
-          updatedBook ? `Kitap başarıyla iade edildi` : `Kitap başarıyla ödünç alındı`, 
-          'success'
-        );
-      } else {
-        console.error('API yanıt hatası:', response.status);
-        showNotification('İşlem sırasında bir hata oluştu', 'error');
       }
     } catch (error) {
-      console.error('İşlem hatası:', error);
+      console.error('Kitap işlemi hatası:', error);
     }
   };
 
+  // Filtrelenmiş kitaplar
+  const filteredBooks = books.filter(book => {
+    const matchesSearch = !searchTerm || 
+      book.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      book.author.toLowerCase().includes(searchTerm.toLowerCase());
+    
+    // 'Tüm Kitaplar' seçiliyse veya hiç kategori seçili değilse, kategoriye bakma
+    const matchesCategory =
+      selectedCategories.length === 0 ||
+      selectedCategories.includes('all') ||
+      book.categories.some(category => selectedCategories.includes(category));
+    
+    return matchesSearch && matchesCategory;
+  });
+
   return (
     <>
-      {/* Bildirim bileşeni */}
-      {notification.type && (
-        <div
-          role="alert"
-          aria-live="assertive"
-          style={{
-            position: 'fixed',
-            top: '2rem',
-            right: '2rem',
-            zIndex: 50,
-            padding: '1rem 1.5rem',
-            borderRadius: '0.5rem',
-            backgroundColor: notification.type === 'success' ? 'rgba(16, 185, 129, 0.9)' : 
-                             notification.type === 'error' ? 'rgba(239, 68, 68, 0.9)' : 
-                             'rgba(59, 130, 246, 0.9)',
-            color: 'white',
-            boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05)',
-            transform: 'translateY(0)',
-            opacity: 1,
-            transition: 'all 0.3s ease',
-            animation: 'fadeIn 0.3s ease-out'
-          }}
-        >
-          {notification.message}
-        </div>
-      )}
-
+      <GlobalStyles />
       <div className="about-container">
         {/* Arka Plan Görseli */}
         <div className="about-background">
@@ -654,20 +366,31 @@ function BooksContent() {
           }}>
             <div style={{
               display: 'flex',
-              gap: '0.75rem',
-              flexWrap: 'wrap',
+              flexDirection: 'row',
               justifyContent: 'center',
-              marginBottom: '2rem'
+              marginBottom: '2rem',
+              backgroundColor: 'rgba(17, 24, 39, 0.6)',
+              borderRadius: '0.75rem',
+              padding: '0.75rem',
+              boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)'
             }}>
-              {categories.map(category => (
-                <div
-                  key={category.id}
-                  className={`category-item ${selectedCategory === category.id ? 'category-item-active' : ''}`}
-                  onClick={() => handleCategoryChange(category.id)}
-                >
-                  {category.name}
-                </div>
-              ))}
+              <div style={{
+                display: 'flex',
+                flexWrap: 'wrap',
+                gap: '0.5rem',
+                justifyContent: 'center'
+              }}>
+                {categories.map(category => (
+                  <div
+                    key={category.id}
+                    className={`category-item ${selectedCategories.includes(category.id) ? 'category-item-active' : ''}`}
+                    onClick={() => handleCategoryChange(category.id)}
+                    style={{ fontSize: '0.8rem', padding: '0.5rem 0.75rem' }}
+                  >
+                    {category.name}
+                  </div>
+                ))}
+              </div>
             </div>
           </div>
           
@@ -697,8 +420,8 @@ function BooksContent() {
                 textAlign: 'center'
               }}
             >
-              {selectedCategory === 'all' ? 'Tüm Kitaplar' : 
-              categories.find(c => c.id === selectedCategory)?.name || 'Kitaplar'}
+              {selectedCategories.length === 0 ? 'Tüm Kitaplar' : 
+               categories.find(c => c.id === selectedCategories[0])?.name || 'Kitaplar'}
             </h1>
             
             {/* Arama Kutusu */}
@@ -756,7 +479,6 @@ function BooksContent() {
             margin: '0 auto',
             padding: '1rem'
           }}>
-            {/* Yükleniyor, Hata veya Sonuç Gösterimi */}
             {loading ? (
               <div style={{ textAlign: 'center', padding: '2rem' }}>
                 <div style={{ 
@@ -811,7 +533,7 @@ function BooksContent() {
                       transition: 'all 0.5s ease',
                       borderRadius: '1rem',
                       border: '1px solid rgba(30, 41, 59, 0.6)',
-                      height: 'auto',  // Esnek yükseklik için değiştirdik
+                      height: 'auto',
                       minHeight: '380px',
                       display: 'flex',
                       flexDirection: 'column'
@@ -952,6 +674,7 @@ function BooksContent() {
                         })}
                       </div>
                       
+                      {/* Durum etiketi */}
                       <div style={{
                         display: 'flex',
                         alignItems: 'center',
@@ -981,7 +704,7 @@ function BooksContent() {
                       borderTop: '1px solid rgba(255, 255, 255, 0.1)'
                     }}>
                       <Link 
-                        href={`/books/${book.id}`} 
+                        href={`/books/${book.id}`}
                         aria-label={`${book.title} kitabının detaylarını görüntüle`}
                         style={{
                           padding: '0.5rem 1rem',
@@ -1003,69 +726,38 @@ function BooksContent() {
                           e.currentTarget.style.backgroundColor = 'rgba(59, 130, 246, 0.2)';
                           e.currentTarget.style.transform = 'scale(1)';
                           e.currentTarget.style.borderRadius = '0.5rem';
-                        }}>
+                        }}
+                      >
                         Detaylar
                       </Link>
                       
-                      {userToken && book.available && (
-                        <button
-                          onClick={(e) => handleReturnBook(e, book.id)}
-                          aria-label={`${book.title} kitabını ödünç al`}
-                          style={{
-                            padding: '0.5rem 1rem',
-                            backgroundColor: 'rgba(16, 185, 129, 0.2)',
-                            color: '#6ee7b7',
-                            borderRadius: '0.5rem',
-                            textDecoration: 'none',
-                            fontSize: '0.875rem',
-                            transition: 'all 0.5s ease',
-                            border: 'none',
-                            cursor: 'pointer'
-                          }}
-                          onMouseOver={(e) => {
-                            e.currentTarget.style.backgroundColor = 'rgba(16, 185, 129, 0.4)';
-                            e.currentTarget.style.transform = 'scale(1.05)';
-                            e.currentTarget.style.borderRadius = '0.7rem';
-                          }}
-                          onMouseOut={(e) => {
-                            e.currentTarget.style.backgroundColor = 'rgba(16, 185, 129, 0.2)';
-                            e.currentTarget.style.transform = 'scale(1)';
-                            e.currentTarget.style.borderRadius = '0.5rem';
-                          }}
-                        >
-                          Ödünç Al
-                        </button>
-                      )}
-                      
-                      {userToken && !book.available && (
-                        <button
-                          onClick={(e) => handleReturnBook(e, book.id)}
-                          aria-label={`${book.title} kitabını iade et`}
-                          style={{
-                            padding: '0.5rem 1rem',
-                            backgroundColor: 'rgba(239, 68, 68, 0.2)',
-                            color: '#fca5a5',
-                            borderRadius: '0.5rem',
-                            textDecoration: 'none',
-                            fontSize: '0.875rem',
-                            transition: 'all 0.5s ease',
-                            border: 'none',
-                            cursor: 'pointer'
-                          }}
-                          onMouseOver={(e) => {
-                            e.currentTarget.style.backgroundColor = 'rgba(239, 68, 68, 0.4)';
-                            e.currentTarget.style.transform = 'scale(1.05)';
-                            e.currentTarget.style.borderRadius = '0.7rem';
-                          }}
-                          onMouseOut={(e) => {
-                            e.currentTarget.style.backgroundColor = 'rgba(239, 68, 68, 0.2)';
-                            e.currentTarget.style.transform = 'scale(1)';
-                            e.currentTarget.style.borderRadius = '0.5rem';
-                          }}
-                        >
-                          İade Et
-                        </button>
-                      )}
+                      <button
+                        onClick={(e) => handleBorrowBook(e, book.id)}
+                        aria-label={book.available ? `${book.title} kitabını ödünç al` : `${book.title} kitabını iade et`}
+                        style={{
+                          padding: '0.5rem 1rem',
+                          backgroundColor: book.available ? 'rgba(16, 185, 129, 0.2)' : 'rgba(239, 68, 68, 0.2)',
+                          color: book.available ? '#6ee7b7' : '#fca5a5',
+                          borderRadius: '0.5rem',
+                          textDecoration: 'none',
+                          fontSize: '0.875rem',
+                          transition: 'all 0.5s ease',
+                          border: 'none',
+                          cursor: 'pointer'
+                        }}
+                        onMouseOver={(e) => {
+                          e.currentTarget.style.backgroundColor = book.available ? 'rgba(16, 185, 129, 0.4)' : 'rgba(239, 68, 68, 0.4)';
+                          e.currentTarget.style.transform = 'scale(1.05)';
+                          e.currentTarget.style.borderRadius = '0.7rem';
+                        }}
+                        onMouseOut={(e) => {
+                          e.currentTarget.style.backgroundColor = book.available ? 'rgba(16, 185, 129, 0.2)' : 'rgba(239, 68, 68, 0.2)';
+                          e.currentTarget.style.transform = 'scale(1)';
+                          e.currentTarget.style.borderRadius = '0.5rem';
+                        }}
+                      >
+                        {book.available ? 'Ödünç Al' : 'İade Et'}
+                      </button>
                     </div>
                   </div>
                 ))}
@@ -1075,48 +767,5 @@ function BooksContent() {
         </div>
       </div>
     </>
-  );
-}
-
-/**
- * Kitaplar Sayfası
- * Tüm kitapları listeler ve kitap detaylarına bağlantı sağlar
- */
-export default function BooksPage() {
-  return (
-    <Suspense fallback={
-      <div className="about-container">
-        {/* Arka Plan Görseli */}
-        <div className="about-background">
-          <Image
-            src="/library1.jpg"
-            alt="Kütüphane Görünümü"
-            fill
-            style={{ objectFit: 'cover', opacity: 0.15 }}
-            priority
-            quality={90}
-          />
-        </div>
-        
-        <div className="about-main" style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '100vh' }}>
-          <GlobalStyles />
-          <div style={{ textAlign: 'center', padding: '2rem', position: 'relative', zIndex: 1 }}>
-            <div style={{ 
-              display: 'inline-block',
-              width: '3rem',
-              height: '3rem',
-              borderRadius: '50%',
-              borderTop: '3px solid rgb(55, 60, 69)',
-              borderRight: '3px solid transparent',
-              animation: 'spin 1s linear infinite',
-              marginBottom: '1rem'
-            }}></div>
-            <p style={{ color: '#94a3b8', fontSize: '1.5rem' }}>Yükleniyor...</p>
-          </div>
-        </div>
-      </div>
-    }>
-      <BooksContent />
-    </Suspense>
   );
 }

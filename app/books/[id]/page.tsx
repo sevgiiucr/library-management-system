@@ -67,8 +67,11 @@ async function getBook(id: string) {
 
 // Ana sayfa bileşeni (Server Component)
 export default async function BookDetailPage({ params }: { params: { id: string } }) {
-  // params'ı direkt kullan, async fonksiyon olduğu için sorun olmaz
-  const book = await getBook(params.id);
+  // params.id yerine destructuring kullanarak id değerini alıyoruz
+  const { id } = params;
+  
+  // Destructuring yapılan id değerini kullan
+  const book = await getBook(id);
   
   // Kitap bulunamazsa 404 sayfasına yönlendir
   if (!book) {

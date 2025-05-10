@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 
-// AuthModal bileşeni - ortak modal yapısı
+// Temel AuthModal bileşeni
 interface AuthModalProps {
   isOpen: boolean;
   onClose: () => void;
@@ -24,12 +24,12 @@ const AuthModal: React.FC<AuthModalProps> = ({
   useEffect(() => {
     if (isOpen) {
       setIsVisible(true);
-      document.body.style.overflow = 'hidden'; // Arka planın kaydırılmasını engelle
+      document.body.style.overflow = 'hidden'; 
     } else {
       const timer = setTimeout(() => {
         setIsVisible(false);
       }, 300);
-      document.body.style.overflow = 'auto'; // Kaydırmayı tekrar etkinleştir
+      document.body.style.overflow = 'auto';
       
       return () => clearTimeout(timer);
     }
@@ -38,35 +38,66 @@ const AuthModal: React.FC<AuthModalProps> = ({
   if (!isVisible) return null;
 
   return (
-    <div 
-      className="fixed inset-0 z-50 bg-black/75 backdrop-blur-md"
-      style={{ backdropFilter: 'blur(4px)' }}
-      onClick={onClose}
-    >
-      <div
-        className="absolute top-1/2 left-0 right-0 mx-auto bg-black/80 border border-gray-700 rounded-xl shadow-2xl w-full max-w-md p-6 transform -translate-y-1/2"
-        style={{
-          animation: 'modalOpen 0.3s ease-out forwards',
-        }}
-        onClick={(e) => e.stopPropagation()}
-      >
-        <h2 className="text-xl font-bold mb-2 text-white text-center">
+    <div style={{
+      position: 'fixed',
+      left: 0,
+      top: 0,
+      width: '100%',
+      height: '100%',
+      backgroundColor: 'rgba(0, 0, 0, 0.05)',
+      zIndex: 1000,
+      display: 'flex',
+      justifyContent: 'center',
+      alignItems: 'flex-start',
+      paddingTop: '100px'
+    }} onClick={onClose}>
+      <div style={{
+        position: 'relative',
+        backgroundColor: 'rgba(30, 41, 59, 0.85)',
+        width: '90%', 
+        maxWidth: '450px',
+        borderRadius: '8px',
+        padding: '24px',
+        boxShadow: '0 4px 6px rgba(0, 0, 0, 0.1)',
+        border: '1px solid rgba(30, 40, 56, 0.18)'
+      }} onClick={e => e.stopPropagation()}>
+        <h2 style={{
+          color: 'white',
+          fontSize: '1.5rem',
+          fontWeight: 'bold',
+          textAlign: 'center',
+          marginBottom: '16px'
+        }}>
           {title}
         </h2>
         
         {description && (
-          <p className="mb-4 text-gray-300 text-center">
+          <p style={{
+            color: '#94a3b8',
+            textAlign: 'center',
+            marginBottom: '16px'
+          }}>
             {description}
           </p>
         )}
         
-        <div className="mt-4">
+        <div>
           {children}
         </div>
 
         <button
           onClick={onClose}
-          className="mt-4 w-full flex justify-center text-gray-400 hover:text-gray-200 transition-colors duration-150"
+          style={{
+            display: 'block',
+            width: '100%',
+            marginTop: '16px',
+            padding: '8px',
+            backgroundColor: 'transparent',
+            border: 'none',
+            color: '#94a3b8',
+            cursor: 'pointer',
+            fontSize: '14px'
+          }}
         >
           Kapat
         </button>
@@ -77,9 +108,6 @@ const AuthModal: React.FC<AuthModalProps> = ({
 
 /**
  * Giriş Yapma Modal Bileşeni
- * 
- * Kullanıcı giriş formunu içeren modal bileşenidir.
- * Email ve şifre alanlarını içerir, giriş işlemini gerçekleştirir.
  */
 export function LoginModal({ 
   isOpen, 
@@ -125,15 +153,13 @@ export function LoginModal({
         throw new Error(data.message || data.error || 'Kullanıcı adı veya şifre hatalı');
       }
       
-      // Başarılı giriş - accessToken'ı localStorage'da sakla
       localStorage.setItem('accessToken', data.accessToken);
       localStorage.setItem('user', JSON.stringify(data.user));
       
-      // Not: refreshToken otomatik olarak http-only cookie olarak ayarlandı
-      // ve JavaScript tarafından erişilemez, bu yüzden burada saklamıyoruz
-      
-      onClose();
-      router.push('/dashboard');
+      setTimeout(() => {
+        onClose();
+        router.replace('/dashboard');
+      }, 100);
     } catch (err: any) {
       console.error('Giriş hatası:', err);
       setError(err.message || 'Bağlantı hatası. Lütfen tekrar deneyin');
@@ -147,7 +173,6 @@ export function LoginModal({
       onClose();
       openRegisterModal();
     } else {
-      // Alternatif olay tabanlı yaklaşım
       onClose();
       const event = new CustomEvent('openRegisterModal');
       window.dispatchEvent(event);
@@ -159,18 +184,26 @@ export function LoginModal({
       isOpen={isOpen} 
       onClose={onClose} 
       title="Giriş"
-      description=""
     >
       {error && (
-        <div className="bg-red-900/50 border border-red-800 text-red-300 p-3 rounded-md mb-6">
-          <p>{error}</p>
+        <div style={{
+          backgroundColor: '#7f1d1d',
+          padding: '10px',
+          borderRadius: '4px',
+          marginBottom: '16px'
+        }}>
+          <p style={{ color: '#fca5a5', margin: 0 }}>{error}</p>
         </div>
       )}
 
-      <form onSubmit={handleSubmit} className="space-y-6">
-        {/* Email input */}
-        <div>
-          <label htmlFor="email" className="block text-gray-300 mb-2 text-sm">
+      <form onSubmit={handleSubmit}>
+        <div style={{ marginBottom: '16px' }}>
+          <label htmlFor="email" style={{
+            display: 'block',
+            color: '#94a3b8',
+            marginBottom: '8px',
+            fontSize: '14px'
+          }}>
             E-posta
           </label>
           <input 
@@ -179,14 +212,26 @@ export function LoginModal({
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             required
-            className="w-full p-3 bg-gray-700/80 border border-gray-600 rounded-lg text-sm text-white focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+            style={{
+              width: '100%',
+              padding: '10px',
+              backgroundColor: '#334155',
+              border: '1px solid #475569',
+              borderRadius: '4px',
+              color: 'white',
+              fontSize: '14px'
+            }}
             placeholder="ornek@email.com"
           />
         </div>
 
-        {/* Password input */}
-        <div>
-          <label htmlFor="password" className="block text-gray-300 mb-2 text-sm">
+        <div style={{ marginBottom: '16px' }}>
+          <label htmlFor="password" style={{
+            display: 'block',
+            color: '#94a3b8',
+            marginBottom: '8px',
+            fontSize: '14px'
+          }}>
             Şifre
           </label>
           <input 
@@ -195,50 +240,87 @@ export function LoginModal({
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             required
-            className="w-full p-3 bg-gray-700/80 border border-gray-600 rounded-lg text-sm text-white focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+            style={{
+              width: '100%',
+              padding: '10px',
+              backgroundColor: '#334155',
+              border: '1px solid #475569',
+              borderRadius: '4px',
+              color: 'white',
+              fontSize: '14px'
+            }}
             placeholder="••••••••"
           />
         </div>
 
-        {/* Remember me & Forgot password */}
-        <div className="flex justify-between items-center">
-          <label className="flex items-center gap-2 text-sm text-gray-300">
+        <div style={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          marginBottom: '16px'
+        }}>
+          <label style={{
+            display: 'flex',
+            alignItems: 'center',
+            color: '#94a3b8',
+            fontSize: '14px'
+          }}>
             <input 
               type="checkbox" 
               checked={rememberMe}
               onChange={(e) => setRememberMe(e.target.checked)}
-              className="rounded bg-gray-700 border-gray-600 text-blue-500 focus:ring-blue-500 focus:ring-offset-0"
+              style={{ marginRight: '8px' }}
             />
             Beni hatırla
           </label>
-          <a href="#" className="text-sm text-blue-400 hover:text-blue-300 transition-colors">
+          <a 
+            href="#" 
+            style={{
+              fontSize: '14px',
+              color: '#a78bfa',
+              textDecoration: 'none'
+            }}
+          >
             Şifremi unuttum?
           </a>
         </div>
 
-        {/* Login button */}
         <button 
           type="submit"
           disabled={loading}
-          className="w-full p-3 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium mt-4 transition-colors duration-150 disabled:opacity-70 disabled:cursor-not-allowed"
+          style={{
+            width: '100%',
+            padding: '12px',
+            backgroundColor: '#7c3aed',
+            border: 'none',
+            borderRadius: '4px',
+            color: 'white',
+            fontWeight: '500',
+            cursor: loading ? 'not-allowed' : 'pointer',
+            opacity: loading ? 0.7 : 1
+          }}
         >
-          {loading ? (
-            <div className="flex items-center justify-center">
-              <svg className="animate-spin -ml-1 mr-2 h-5 w-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-              </svg>
-              Giriş yapılıyor...
-            </div>
-          ) : 'Giriş Yap'}
+          {loading ? 'Giriş yapılıyor...' : 'Giriş Yap'}
         </button>
 
-        <div className="text-center mt-4 text-sm text-gray-300">
+        <div style={{
+          textAlign: 'center',
+          marginTop: '16px',
+          color: '#94a3b8',
+          fontSize: '14px'
+        }}>
           Hesabınız yok mu?{' '}
           <button 
             type="button"
             onClick={switchToRegister}
-            className="text-blue-400 hover:text-blue-300 font-medium transition-colors"
+            style={{
+              backgroundColor: 'transparent',
+              border: 'none',
+              color: '#a78bfa',
+              fontWeight: '500',
+              padding: 0,
+              cursor: 'pointer'
+            }}
           >
             Kayıt Ol
           </button>
@@ -250,9 +332,6 @@ export function LoginModal({
 
 /**
  * Kayıt Olma Modal Bileşeni
- * @param {boolean} isOpen - Modal'ın açık/kapalı durumu
- * @param {function} onClose - Modal'ı kapatma fonksiyonu
- * @param {function} onRegisterSuccess - Kayıt başarılı olduğunda çağrılacak fonksiyon
  */
 export function RegisterModal({ 
   isOpen, 
@@ -322,14 +401,25 @@ export function RegisterModal({
       title="Yeni Hesap Oluştur"
       description="Kütüphane hizmetlerinden yararlanmak için hesap oluşturun."
     >
-      <form onSubmit={handleSubmit} className="space-y-4">
-        {error && (
-          <div className="p-3 bg-red-900/50 border border-red-800 text-red-300 rounded-md text-sm">
-            {error}
-          </div>
-        )}
-        <div>
-          <label className="block text-gray-300 mb-2 text-sm">
+      {error && (
+        <div style={{
+          backgroundColor: '#7f1d1d',
+          padding: '10px',
+          borderRadius: '4px',
+          marginBottom: '16px'
+        }}>
+          <p style={{ color: '#fca5a5', margin: 0 }}>{error}</p>
+        </div>
+      )}
+
+      <form onSubmit={handleSubmit}>
+        <div style={{ marginBottom: '16px' }}>
+          <label style={{
+            display: 'block',
+            color: '#94a3b8',
+            marginBottom: '8px',
+            fontSize: '14px'
+          }}>
             Ad Soyad
           </label>
           <input 
@@ -338,11 +428,25 @@ export function RegisterModal({
             onChange={(e) => setName(e.target.value)}
             placeholder="Ad Soyad"
             required
-            className="w-full p-3 bg-gray-700/80 border border-gray-600 rounded-lg text-sm text-white focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+            style={{
+              width: '100%',
+              padding: '10px',
+              backgroundColor: '#334155',
+              border: '1px solid #475569',
+              borderRadius: '4px',
+              color: 'white',
+              fontSize: '14px'
+            }}
           />
         </div>
-        <div>
-          <label className="block text-gray-300 mb-2 text-sm">
+        
+        <div style={{ marginBottom: '16px' }}>
+          <label style={{
+            display: 'block',
+            color: '#94a3b8',
+            marginBottom: '8px',
+            fontSize: '14px'
+          }}>
             E-posta
           </label>
           <input 
@@ -351,11 +455,25 @@ export function RegisterModal({
             onChange={(e) => setEmail(e.target.value)}
             placeholder="ornek@mail.com"
             required
-            className="w-full p-3 bg-gray-700/80 border border-gray-600 rounded-lg text-sm text-white focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+            style={{
+              width: '100%',
+              padding: '10px',
+              backgroundColor: '#334155',
+              border: '1px solid #475569',
+              borderRadius: '4px',
+              color: 'white',
+              fontSize: '14px'
+            }}
           />
         </div>
-        <div>
-          <label className="block text-gray-300 mb-2 text-sm">
+        
+        <div style={{ marginBottom: '16px' }}>
+          <label style={{
+            display: 'block',
+            color: '#94a3b8',
+            marginBottom: '8px',
+            fontSize: '14px'
+          }}>
             Şifre
           </label>
           <input 
@@ -364,11 +482,25 @@ export function RegisterModal({
             onChange={(e) => setPassword(e.target.value)}
             placeholder="••••••"
             required
-            className="w-full p-3 bg-gray-700/80 border border-gray-600 rounded-lg text-sm text-white focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+            style={{
+              width: '100%',
+              padding: '10px',
+              backgroundColor: '#334155',
+              border: '1px solid #475569',
+              borderRadius: '4px',
+              color: 'white',
+              fontSize: '14px'
+            }}
           />
         </div>
-        <div>
-          <label className="block text-gray-300 mb-2 text-sm">
+        
+        <div style={{ marginBottom: '16px' }}>
+          <label style={{
+            display: 'block',
+            color: '#94a3b8',
+            marginBottom: '8px',
+            fontSize: '14px'
+          }}>
             Şifre (Tekrar)
           </label>
           <input 
@@ -377,22 +509,54 @@ export function RegisterModal({
             onChange={(e) => setConfirmPassword(e.target.value)}
             placeholder="••••••"
             required
-            className="w-full p-3 bg-gray-700/80 border border-gray-600 rounded-lg text-sm text-white focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+            style={{
+              width: '100%',
+              padding: '10px',
+              backgroundColor: '#334155',
+              border: '1px solid #475569',
+              borderRadius: '4px',
+              color: 'white',
+              fontSize: '14px'
+            }}
           />
         </div>
+        
         <button 
           type="submit"
           disabled={loading}
-          className="w-full p-3 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium mt-4 transition-colors duration-150 disabled:opacity-70 disabled:cursor-not-allowed"
+          style={{
+            width: '100%',
+            padding: '12px',
+            backgroundColor: '#7c3aed',
+            border: 'none',
+            borderRadius: '4px',
+            color: 'white',
+            fontWeight: '500',
+            cursor: loading ? 'not-allowed' : 'pointer',
+            opacity: loading ? 0.7 : 1
+          }}
         >
           {loading ? 'Kaydediliyor...' : 'Kayıt Ol'}
         </button>
-        <div className="text-center mt-4 text-sm text-gray-300">
+        
+        <div style={{
+          textAlign: 'center',
+          marginTop: '16px',
+          color: '#94a3b8',
+          fontSize: '14px'
+        }}>
           Zaten hesabınız var mı?{' '}
           <button 
             type="button"
             onClick={openLoginModal}
-            className="text-blue-400 hover:text-blue-300 font-medium transition-colors"
+            style={{
+              backgroundColor: 'transparent',
+              border: 'none',
+              color: '#a78bfa',
+              fontWeight: '500',
+              padding: 0,
+              cursor: 'pointer'
+            }}
           >
             Giriş Yap
           </button>
